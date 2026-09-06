@@ -1,0 +1,156 @@
+{
+  "verification_id": "VER-2026-08-14-8F3A21",
+  "reference_id": "REF-BF-1001",
+  "status": "completed",
+  "created_at": "2026-08-14T09:12:41Z",
+  "completed_at": "2026-08-14T09:13:05Z",
+  "updated_at": "2026-08-14T09:13:05Z",
+  "provider": { "name": "IndiaKYC Composite", "version": "v2", "request_id": "req_01J5A7ZK3M" },
+  "data": {
+    "personal": {
+      "full_name": "Rohan Kumar Mehta",
+      "gender": "MALE",
+      "dob": "1991-03-14",
+      "age": 35,
+      "occupation": "Software Engineer",
+      "income": 1000000,
+      "income_type": "returned",
+      "income_source": "PAN",
+      "relatives": [
+        { "name": "Suresh Mehta", "relation": "FATHER", "source": "PAN" },
+        { "name": "Anita Mehta", "relation": "MOTHER", "source": "PAN" }
+      ]
+    },
+    "phones": [
+      { "number": "9876543210", "type": "MOBILE", "source": "PAN" },
+      { "number": "+91 98123 45678", "type": "MOBILE", "source": "UAN" },
+      { "number": "08041234567", "type": "LANDLINE", "source": "CREDIT" }
+    ],
+    "emails": [
+      { "email": "rohan.mehta@example.com", "source": "PAN" },
+      { "email": "Rohan.K.Mehta@abctech.example", "source": "UAN" }
+    ],
+    "documents": {
+      "pan": {
+        "number": "ABCPM1234D",
+        "name": "ROHAN KUMAR MEHTA",
+        "type": "Individual",
+        "aadhaar_linked": true,
+        "status": "VALID",
+        "last_updated": "2026-08-14T09:12:50Z"
+      },
+      "aadhaar": { "masked_number": "XXXXXXXX8848", "linked_to_pan": true, "source": "PAN" },
+      "passport": { "number": "P1234567", "status": null, "source": "CREDIT" },
+      "voter_id": { "number": "ABC1234567", "source": "CREDIT" },
+      "driving_licence": { "number": "KA0120150012345", "source": "CREDIT" },
+      "ration_card": null
+    },
+    "addresses": [
+      {
+        "full_address": "Flat 402, Prestige Towers, Koramangala 5th Block, Bengaluru, Karnataka 560095",
+        "street": "Prestige Towers, Koramangala 5th Block",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "country": "India",
+        "pin_code": "560095",
+        "type": "RESIDENTIAL",
+        "source": "PAN"
+      },
+      {
+        "full_address": "#12, 3rd Cross, Whitefield, Bangalore - 560066, KARNATAKA",
+        "street": "#12, 3rd Cross, Whitefield",
+        "city": "Bangalore",
+        "state": "KARNATAKA",
+        "country": "IN",
+        "pin_code": "560066",
+        "type": "PERMANENT",
+        "source": "UAN"
+      }
+    ],
+    "bank_accounts": [
+      {
+        "account_number": "50100123452345",
+        "ifsc": "HDFC0001234",
+        "bank_name": "HDFC Bank",
+        "branch": "Koramangala",
+        "account_type": "SAVINGS",
+        "name_on_account": "Rohan K Mehta",
+        "source": "UAN"
+      }
+    ],
+    "employment": {
+      "uan": "100234567890",
+      "member_id": "BGBNG00123450000012345",
+      "aadhaar_linked": true,
+      "employee_name_on_record": "ROHAN K MEHTA",
+      "employee_name_match": true,
+      "pf_filing_available": true,
+      "retrieved_at": "2026-08-14T09:12:58Z",
+      "history": [
+        {
+          "employer_name": "ABC Technologies Pvt Ltd",
+          "establishment_id": "BGBNG0012345000",
+          "joining_date": "2018-05-14",
+          "exit_date": null,
+          "status": "CURRENT",
+          "employer_confidence_score": 0.94,
+          "employer_name_match": true,
+          "ownership_type": "Private Limited Company",
+          "establishment_setup_date": "2009-11-02",
+          "employee_count": 1840,
+          "pf_filings": [
+            { "wage_month": "2026-01", "employees": 1790, "amount": 9532000 },
+            { "wage_month": "2026-02", "employees": 1802, "amount": 9601000 },
+            { "wage_month": "2026-03", "employees": 1815, "amount": 9674000 },
+            { "wage_month": "2026-04", "employees": 1821, "amount": 9702000 },
+            { "wage_month": "2026-05", "employees": 1833, "amount": 9761000 },
+            { "wage_month": "2026-06", "employees": 1840, "amount": 9820000 },
+            { "wage_month": "2026-07", "employees": 1840, "amount": 9820000 }
+          ]
+        },
+        {
+          "employer_name": "XYZ Solutions LLP",
+          "establishment_id": "BGBNG0009876000",
+          "joining_date": "2015-07-01",
+          "exit_date": "2018-04-30",
+          "status": "EXITED",
+          "employer_confidence_score": 0.88,
+          "employer_name_match": true,
+          "ownership_type": "Limited Liability Partnership",
+          "establishment_setup_date": "2012-06-18",
+          "employee_count": 215,
+          "pf_filings": []
+        }
+      ]
+    },
+    "mobile": {
+      "number": "9876543210",
+      "is_valid": true,
+      "subscriber_status": "CONNECTED",
+      "connection_type": "POSTPAID",
+      "service_provider": "Jio",
+      "original_provider": "Vodafone Idea",
+      "network_region": "Karnataka",
+      "is_ported": true,
+      "retrieved_at": "2026-08-14T09:13:01Z"
+    },
+    "credit": {
+      "score": 805,
+      "bureau": "CIBIL",
+      "score_date": "2026-08-10",
+      "identifiers": { "pan": "ABCPM1234D", "control_number": "CN-77812309" },
+      "retrieved_at": "2026-08-14T09:13:03Z"
+    },
+    "risk": [
+      {
+        "is_safe": false,
+        "risk_level": "LOW",
+        "reason": "Inactive SIM",
+        "description": "A secondary number associated with this identity was reported inactive by the telecom operator.",
+        "date_detected": "2026-06-02",
+        "last_updated": "2026-08-01",
+        "source": "MOBILE"
+      }
+    ]
+  }
+}

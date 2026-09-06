@@ -1,0 +1,72 @@
+{
+  "verification_id": "VER-2025-11-02-C0FFEE",
+  "reference_id": "REF-BF-2002",
+  "status": "partial",
+  "created_at": "2025-11-02T06:40:00Z",
+  "completed_at": null,
+  "updated_at": "2025-11-02T06:41:12Z",
+  "provider": { "name": "IndiaKYC Composite", "version": "v2", "request_id": "req_01HZZ9" },
+  "data": {
+    "personal": {
+      "full_name": "  priya   S.  NAIR ",
+      "gender": null,
+      "dob": "1987-12-02",
+      "age": null,
+      "occupation": null,
+      "income": null,
+      "relatives": []
+    },
+    "phones": [{ "number": "9900011122", "type": "MOBILE", "source": "PAN" }],
+    "emails": [],
+    "documents": {
+      "pan": { "number": "XYZPN9876K", "name": "PRIYA SURESH NAIR", "type": "Individual", "aadhaar_linked": false, "status": "VALID" },
+      "aadhaar": null,
+      "passport": null,
+      "voter_id": null,
+      "driving_licence": null,
+      "ration_card": null
+    },
+    "addresses": [
+      { "full_address": "14 Marine Drive, Kochi, Kerala 682031", "city": "Kochi", "state": "Kerala", "country": "India", "pin_code": "682031", "type": "RESIDENTIAL", "source": "PAN" },
+      { "full_address": "Plot 9, Sector 21, Navi Mumbai 400706", "city": "Navi Mumbai", "state": "Maharashtra", "country": "India", "pin_code": "400706", "type": "CURRENT", "source": "UAN" }
+    ],
+    "bank_accounts": [],
+    "employment": {
+      "uan": "100998877665",
+      "member_id": null,
+      "aadhaar_linked": false,
+      "employee_name_on_record": "PRIYA NAIR",
+      "employee_name_match": null,
+      "pf_filing_available": false,
+      "history": [
+        {
+          "employer_name": "Coastal Logistics Pvt Ltd",
+          "establishment_id": "KRKOC0004455000",
+          "joining_date": "2021-02-01",
+          "exit_date": "2025-06-30",
+          "status": "EXITED",
+          "employer_confidence_score": 0.61,
+          "employer_name_match": false,
+          "ownership_type": null,
+          "establishment_setup_date": null,
+          "employee_count": null,
+          "pf_filings": []
+        }
+      ]
+    },
+    "mobile": {
+      "number": "9900011122",
+      "is_valid": false,
+      "subscriber_status": "DISCONNECTED",
+      "connection_type": "PREPAID",
+      "service_provider": "Airtel",
+      "original_provider": "Airtel",
+      "network_region": "Kerala",
+      "is_ported": false
+    },
+    "credit": null,
+    "risk": [
+      { "is_safe": true, "risk_level": "HIGH", "reason": "Number disconnected", "description": "Primary number is disconnected.", "date_detected": "2025-10-28", "last_updated": "2025-10-28", "source": "MOBILE" }
+    ]
+  }
+}
