@@ -1,0 +1,2 @@
+/** Canonical AIF capital-path stages (plain module; safe to import from server pages and client components). */
+export const AIF_STAGES: string[] = ['CLIENT_INTELLIGENCE', 'CONSENT_KYC', 'FINANCIAL_PROFILE', 'SUITABILITY', 'RISK_PROFILE', 'LIQUIDITY', 'HORIZON', 'SOURCE_OF_FUNDS', 'SOURCE_OF_WEALTH', 'CONCENTRATION', 'FUND_RELEVANCE', 'FUND_DOCUMENTS', 'PROPOSAL', 'COMPLIANCE_APPROVAL', 'SUBSCRIPTION', 'FUNDING', 'REPORTING'];

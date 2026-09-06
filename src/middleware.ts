@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC.some((p) => path === p || path.startsWith('/_next') || path.startsWith('/api/ingest'));
+  const isPublic = PUBLIC.some((p) => path === p) || path.startsWith('/_next') || path.startsWith('/api/ingest') || path.startsWith('/portal/');
 
   if (!user && !isPublic) {
     if (path.startsWith('/api/')) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });

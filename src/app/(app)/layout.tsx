@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, Briefcase, LayoutDashboard, Search, Settings, ShieldCheck, UserPlus } from 'lucide-react';
+import { Activity, BarChart3, Briefcase, Building2, Landmark, LayoutDashboard, ListTodo, Search, Settings, ShieldCheck, UserPlus } from 'lucide-react';
 import { getStaff } from '@/lib/db/server';
 import { hasPermission, ROLE_LABEL } from '@/lib/security/permissions';
 import { Logo } from '@/components/ui/logo';
@@ -13,7 +13,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
     { href: '/clients', label: 'Clients', icon: Search, show: true },
     { href: '/clients/new', label: 'New verification', icon: UserPlus, show: hasPermission(staff.role, 'verification:ingest') },
+    { href: '/rm', label: 'My day (RM cockpit)', icon: ListTodo, show: true },
     { href: '/cases', label: 'Cases', icon: Briefcase, show: true },
+    { href: '/inventory', label: 'Projects & plots', icon: Building2, show: true },
+    { href: '/aif', label: 'AIF funds & rules', icon: Landmark, show: true },
+    { href: '/management', label: 'Management', icon: BarChart3, show: hasPermission(staff.role, 'audit:read') || hasPermission(staff.role, 'scoring:configure') || hasPermission(staff.role, 'cases:assign') },
     { href: '/audit', label: 'Audit trail', icon: Activity, show: hasPermission(staff.role, 'audit:read') },
     { href: '/admin', label: 'Administration', icon: Settings, show: hasPermission(staff.role, 'scoring:configure') || hasPermission(staff.role, 'users:manage') || hasPermission(staff.role, 'retention:manage') },
   ].filter((n) => n.show);

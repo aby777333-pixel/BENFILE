@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, RefreshCw } from 'lucide-react';
+import { BookOpen, Compass, Download, RefreshCw, Sparkles } from 'lucide-react';
 import type { Client360 } from '@/lib/db/queries';
 import { formatDate, formatINR, formatTenure, monthsBetween } from '@/lib/engines/normalize';
 import { hasPermission, type StaffRole } from '@/lib/security/permissions';
@@ -54,6 +54,15 @@ export function Client360Header({ data, role }: { data: Client360; role: StaffRo
           </div>
         </div>
         <div className="no-print flex flex-wrap gap-2">
+          <Link href={`/clients/${client.id}/analyze`} className="btn btn-primary">
+            <Sparkles size={14} /> Analyze client
+          </Link>
+          <Link href={`/clients/${client.id}/approach`} className="btn">
+            <Compass size={14} /> Recommend approach
+          </Link>
+          <Link href={`/clients/${client.id}/approach?brief=2min`} className="btn">
+            <BookOpen size={14} /> Prepare me for meeting
+          </Link>
           {hasPermission(role, 'verification:ingest') ? (
             <Link href={`/clients/new?clientId=${client.id}`} className="btn">
               <RefreshCw size={14} /> Re-verify
@@ -62,7 +71,7 @@ export function Client360Header({ data, role }: { data: Client360; role: StaffRo
           {hasPermission(role, 'reports:export') ? (
             <form action={exportReport}>
               <input type="hidden" name="clientId" value={client.id} />
-              <button className="btn btn-primary">
+              <button className="btn">
                 <Download size={14} /> Export report
               </button>
             </form>

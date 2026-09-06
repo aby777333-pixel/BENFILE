@@ -92,6 +92,34 @@ export function StatusBadge({ status }: { status: string }) {
   return <Badge tone={tone}>{status.replace(/_/g, ' ')}</Badge>;
 }
 
+const EVIDENCE: Record<string, { label: string; tone: 'good' | 'declared' | 'info' | 'derived' | 'warn' | 'gold' | 'muted' }> = {
+  VERIFIED: { label: 'Verified', tone: 'good' },
+  CLIENT_DECLARED: { label: 'Client declared', tone: 'declared' },
+  OFFICIAL_PUBLIC_RECORD: { label: 'Official public record', tone: 'good' },
+  AUTHORIZED_THIRD_PARTY: { label: 'Authorised third-party data', tone: 'info' },
+  DERIVED_ESTIMATE: { label: 'Derived estimate', tone: 'derived' },
+  POSSIBLE_ASSOCIATION: { label: 'Possible association', tone: 'warn' },
+  ANALYST_PROVIDED: { label: 'Analyst provided', tone: 'gold' },
+  OBSERVED_PATTERN: { label: 'Observed pattern', tone: 'derived' },
+  AI_INTERPRETATION: { label: 'AI interpretation', tone: 'muted' },
+  INSUFFICIENT_DATA: { label: 'Insufficient data', tone: 'muted' },
+};
+/** Evidence-class label used across wealth, assets, documents and analysis. */
+export function EvidenceBadge({ kind, short }: { kind: string; short?: boolean }) {
+  const e = EVIDENCE[kind] ?? { label: kind.replace(/_/g, ' '), tone: 'muted' as const };
+  return <Badge tone={e.tone}>{short ? e.label.split(' ')[0] : e.label}</Badge>;
+}
+
+export function ConfidenceBadge({ level }: { level: string }) {
+  const tone = level === 'VERIFIED' || level === 'HIGH' ? 'good' : level === 'MEDIUM' ? 'info' : level === 'LOW' ? 'warn' : 'muted';
+  return <Badge tone={tone}>conf {level.toLowerCase()}</Badge>;
+}
+
+export function RelevanceBadge({ level }: { level: string }) {
+  const tone = level === 'HIGH' ? 'good' : level === 'MEDIUM' ? 'info' : level === 'LOW' ? 'muted' : 'warn';
+  return <Badge tone={tone}>{level.replace(/_/g, ' ')}</Badge>;
+}
+
 export function ModeBadge({ mode }: { mode: 'LIVE' | 'SANDBOX' | string }) {
   return mode === 'SANDBOX' ? (
     <Badge tone="warn" title="Illustrative connector - no licensed API configured. Replace with a live connector before production use.">

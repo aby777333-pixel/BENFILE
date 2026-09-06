@@ -77,6 +77,15 @@ export const SECTION_ACCESS: Record<string, Permission> = {
   notes: 'clients:read',
   audit: 'audit:read',
   investor: 'investor:capture',
+  wealth: 'financial:read',
+  assets: 'clients:read',
+  legal: 'clients:read',
+  analyze: 'clients:read',
+  approach: 'clients:read',
+  property: 'clients:read',
+  humaninput: 'clients:read',
+  interactions: 'clients:read',
+  ask: 'clients:read',
 };
 
 export const ROLE_LABEL: Record<StaffRole, string> = {

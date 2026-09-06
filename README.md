@@ -27,6 +27,26 @@ Every fact carries an assertion kind (`VERIFIED_FACT` / `CLIENT_DECLARED` / `DER
 a source key and a trust tier (1-7). Full sensitive identifiers live only in `sensitive_values` (no SELECT policy);
 reveals go through an audited RPC. Search by PAN / phone / e-mail / UAN uses SHA-256 hashes.
 
+## Phase 2 - Wealth, Analyze, Business Approach, AIF + Land/Property OS
+
+- **Wealth engine** (`src/lib/wealth/wealth-engine.ts`): ranged, confidence-propagated net worth; liquid net worth; investable assets;
+  composition (verified vs estimated vs declared share); Client Capital Map (liquid now / committed / illiquid / leveraged / unknown);
+  debt-service metrics; coverage by domain. Family-linked wealth and possible associations are always separate.
+- **Analyze Client** (`behavior-engine.ts`): versioned behavioural & financial profile (income, spending, saving, investment behaviour,
+  experience, risk preference from declarations only, resilience, liquidity runway, debt behaviour, credit health, concentration,
+  decision patterns, persona, priorities, engagement, reliability profile), diff vs previous version. Human input influence: NONE.
+- **Recommend Business Approach** (`approach-engine.ts`): AIF and property opportunity engines, opportunity matrix, product relevance
+  (suitability-aware), first-conversation strategy, objection prep, channel/format, timing, next best action, contact-pressure control,
+  meeting briefs (30 s / 2 min / full / AIF / property). No dark patterns.
+- **Matching** (`matching-engine.ts`): project and plot matching with explanations + concerns; legal due-diligence scorecard gates recommendations.
+- **Human input sandbox** (`human-input-engine.ts`): claims → verification plans → VERIFIED / NOT VERIFIED / POSSIBLE MATCH / CONTRADICTED. Context, never fact.
+- **Documents** (`documents-engine.ts` + `/api/documents/upload`): classify, hash, private Storage buckets, structured parse, consistency vs Client 360,
+  duplicate/quality signals, expiry & refresh, access levels. OCR / provider verification are integration points.
+- **Natural-language investigation** (`nlq.ts`, `/api/ask`): intent router over structured data only.
+- **Ops**: `/rm` cockpit, `/management`, `/inventory` (projects, plots, DD, geo, price intel), `/aif` (funds, capital path, configurable rules,
+  freshness windows), `/portal/[token]` client self-service (uploads, declarations, consent withdrawal).
+- Schema: `supabase/migrations/0002_wealth_os.sql`. Seed: `npx tsx scripts/seed-phase2.ts`.
+
 ## Run locally
 
 ```bash
