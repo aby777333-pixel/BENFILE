@@ -192,6 +192,57 @@ export async function resolveDispute(form: FormData): Promise<ActionResult> {
 }
 
 /* ---------------- Prospect + portal consent link ---------------- */
+
+/** Parse an optional Indian mobile / e-mail from a form. Throws a readable error on bad input. */
+function parseContact(form: FormData): { phone: string | null; email: string | null } {
+  const phoneRaw = optText(form.get('phone'));
+  const emailRaw = optText(form.get('email'));
+  const phone = phoneRaw ? normalizePhone(phoneRaw) : null;
+  if (phoneRaw && (!phone || phone.length !== 10)) throw new Error('Mobile number must be a 10-digit Indian mobile (country code optional).');
+  const email = emailRaw ? z.string().email('E-mail address is not valid').max(160).parse(normalizeEmail(emailRaw)) : null;
+  return { phone, email };
+}
+
+/**
+ * Store a declared (unverified) contact on the client row: masked + hashed, with the full value
+ * sealed in sensitive_values (audited reveal) when the role may store sensitive values.
+ * Passing null for a field leaves it unchanged; passing '' clears it. Returns whether values were sealed.
+ */
+async function storeDeclaredContact(db: Awaited<ReturnType<typeof getStaff>>['db'], staff: NonNullable<Awaited<ReturnType<typeof getStaff>>['staff']>, clientId: string, c: { phone: string | null; email: string | null; clearPhone?: boolean; clearEmail?: boolean }): Promise<boolean> {
+  const canSeal = hasPermission(staff.role, 'verification:ingest');
+  const seal = async (kind: 'PHONE' | 'EMAIL', value: string) => {
+    if (!canSeal) return null;
+    const { data, error } = await db.rpc('store_sensitive', { p_client_id: clientId, p_run_id: null, p_kind: kind, p_entity_table: 'clients', p_field_key: kind === 'PHONE' ? 'contact_phone' : 'contact_email', p_value_full: value, p_value_hash: hashIdentifier(kind, value) });
+    return error ? null : (data as string);
+  };
+  const update: Record<string, unknown> = {};
+  if (c.phone) Object.assign(update, { contact_phone_masked: maskPhone(c.phone), contact_phone_hash: hashIdentifier('PHONE', c.phone), contact_phone_sensitive_id: await seal('PHONE', c.phone) });
+  else if (c.clearPhone) Object.assign(update, { contact_phone_masked: null, contact_phone_hash: null, contact_phone_sensitive_id: null });
+  if (c.email) Object.assign(update, { contact_email_masked: maskEmail(c.email), contact_email_hash: hashIdentifier('EMAIL', c.email), contact_email_sensitive_id: await seal('EMAIL', c.email) });
+  else if (c.clearEmail) Object.assign(update, { contact_email_masked: null, contact_email_hash: null, contact_email_sensitive_id: null });
+  if (Object.keys(update).length) {
+    const { error } = await db.from('clients').update(update).eq('id', clientId);
+    if (error) throw new Error(error.message);
+  }
+  return canSeal;
+}
+
+/** Edit the declared contact on an existing client (Contact tab). Leaving a field blank keeps it; ticking "clear" removes it. */
+export async function updateDeclaredContact(form: FormData): Promise<ActionResult> {
+  return wrap(async () => {
+    const clientId = uuid.parse(form.get('clientId'));
+    const { phone, email } = parseContact(form);
+    const clearPhone = form.get('clearPhone') === 'on';
+    const clearEmail = form.get('clearEmail') === 'on';
+    if (!phone && !email && !clearPhone && !clearEmail) throw new Error('Enter a mobile or e-mail, or tick clear.');
+    const { db, staff } = await guard('clients:write');
+    const sealed = await storeDeclaredContact(db, staff, clientId, { phone, email, clearPhone, clearEmail });
+    await audit(db, { action: 'client.contact_update', clientId, entityTable: 'clients', entityId: clientId, details: { phone: !!phone, email: !!email, clearPhone, clearEmail, sealed } });
+    await db.from('intelligence_events').insert({ client_id: clientId, event_type: 'CONTACT', title: 'Declared contact updated by staff', detail: [phone ? 'mobile set' : null, email ? 'e-mail set' : null, clearPhone ? 'mobile cleared' : null, clearEmail ? 'e-mail cleared' : null].filter(Boolean).join(', '), source_key: 'STAFF', actor_id: staff.userId });
+    revalidate(clientId);
+    return sealed ? 'Contact saved (masked on the record, full value sealed).' : 'Contact saved masked only - your role cannot seal full values.';
+  });
+}
 /**
  * Creates a prospect record with NO verification data and no consent, and mints a portal link so
  * the person can accept Part A (preliminary screening) on their own device. Nothing is looked up
@@ -202,31 +253,13 @@ export async function createProspect(form: FormData): Promise<ActionResult & { l
     const displayName = z.string().min(2).max(120).parse(String(form.get('displayName') ?? '').trim());
     const city = z.string().max(80).optional().parse(form.get('city') ? String(form.get('city')).trim() : undefined);
     const days = z.coerce.number().int().min(1).max(30).parse(form.get('days') ?? 7);
-    const phoneRaw = optText(form.get('phone'));
-    const emailRaw = optText(form.get('email'));
-    const phone = phoneRaw ? normalizePhone(phoneRaw) : null;
-    if (phoneRaw && (!phone || phone.length !== 10)) throw new Error('Mobile number must be a 10-digit Indian mobile (country code optional).');
-    const email = emailRaw ? z.string().email('E-mail address is not valid').max(160).parse(normalizeEmail(emailRaw)) : null;
+    const { phone, email } = parseContact(form);
     const { db, staff } = await guard('clients:write');
     if (!hasPermission(staff.role, 'documents:request')) throw new Error('Your role cannot issue portal links');
     const { data: client, error } = await db.from('clients').insert({ display_name: displayName, city: city || null, status: 'PENDING', consent_status: 'PENDING', created_by: staff.userId, assigned_to: staff.userId }).select('id,client_code').single();
     if (error || !client) throw new Error(error?.message ?? 'Could not create prospect');
 
-    // Contact details: masked + hashed on the client row; the full value is sealed in sensitive_values
-    // (audited reveal) when the role may store sensitive values. Never written anywhere else.
-    const canSeal = hasPermission(staff.role, 'verification:ingest');
-    const seal = async (kind: 'PHONE' | 'EMAIL', value: string) => {
-      if (!canSeal) return null;
-      const { data, error: sErr } = await db.rpc('store_sensitive', { p_client_id: client.id, p_run_id: null, p_kind: kind, p_entity_table: 'clients', p_field_key: kind === 'PHONE' ? 'contact_phone' : 'contact_email', p_value_full: value, p_value_hash: hashIdentifier(kind, value) });
-      return sErr ? null : (data as string);
-    };
-    if (phone || email) {
-      const update: Record<string, unknown> = {};
-      if (phone) Object.assign(update, { contact_phone_masked: maskPhone(phone), contact_phone_hash: hashIdentifier('PHONE', phone), contact_phone_sensitive_id: await seal('PHONE', phone) });
-      if (email) Object.assign(update, { contact_email_masked: maskEmail(email), contact_email_hash: hashIdentifier('EMAIL', email), contact_email_sensitive_id: await seal('EMAIL', email) });
-      const { error: uErr } = await db.from('clients').update(update).eq('id', client.id);
-      if (uErr) throw new Error(uErr.message);
-    }
+    const canSeal = await storeDeclaredContact(db, staff, client.id, { phone, email });
     const { data: token, error: tErr } = await db.rpc('mint_portal_token', { p_client_id: client.id, p_days: days });
     if (tErr) throw new Error(tErr.message);
     await audit(db, { action: 'client.prospect_create', clientId: client.id, entityTable: 'clients', entityId: client.id, details: { portalDays: days, consentStage: 'PRELIMINARY_PENDING', contact: { phone: !!phone, email: !!email, sealed: canSeal } } });

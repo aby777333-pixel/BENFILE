@@ -6,12 +6,14 @@ import { Badge, MatchBadge, ProvenanceTag, SourceTag } from '@/components/ui/bad
 import { EvidenceDrawer } from '@/components/ui/evidence';
 import { MaskedValue } from '@/components/ui/masked';
 import { DisputeButton } from '@/components/client360/dispute-button';
+import { ContactEditForm } from '@/components/client360/contact-edit-form';
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { c360, role } = await loadClient(id, 'contact');
   const { run, sensitive, client } = c360;
   const canReveal = hasPermission(role, 'sensitive:reveal');
+  const canWrite = hasPermission(role, 'clients:write');
   const declared = (
     <Panel title="Contact given at prospect creation" right={<Badge tone="declared">Client declared</Badge>}>
       {client.contact_phone_masked || client.contact_email_masked ? (
@@ -24,7 +26,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       ) : (
         <p className="text-sm text-ink-400">No contact details were captured when the prospect was created.</p>
       )}
-      <p className="mt-2 text-[11px] text-ink-500">Entered by the relationship manager when the portal link was issued. Not verified until a one-time-code or provider check confirms ownership under the client&apos;s consent.</p>
+      <p className="mt-2 text-[11px] text-ink-500">Entered by the relationship manager. Not verified until a one-time-code or provider check confirms ownership under the client&apos;s consent.</p>
+      {canWrite ? <ContactEditForm clientId={id} hasPhone={!!client.contact_phone_masked} hasEmail={!!client.contact_email_masked} /> : null}
     </Panel>
   );
   if (!run?.assessment)
@@ -41,7 +44,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   return (
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="space-y-4 xl:col-span-2">
-        {client.contact_phone_masked || client.contact_email_masked ? declared : null}
+        {client.contact_phone_masked || client.contact_email_masked || canWrite ? declared : null}
         <Panel title="Phone numbers" right={<span className="text-[11px] text-ink-400">Each number shows the source it is linked to</span>}>
           {sensitive.phones.length ? (
             <table className="table">
