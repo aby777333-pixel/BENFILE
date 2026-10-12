@@ -66,7 +66,7 @@ export interface Client360 {
   run: RunRow | null;
   runs: Array<Pick<RunRow, 'id' | 'run_seq' | 'snapshot_label' | 'status' | 'completed_at' | 'ingested_at' | 'provider_key' | 'verification_id'>>;
   signals: SignalRow[];
-  consents: Array<{ id: string; status: string; purpose: string; purpose_code: string; granted_at: string | null; expires_at: string | null; sources_authorized: string[]; provider_key: string | null; consent_reference: string | null }>;
+  consents: Array<{ id: string; status: string; purpose: string; purpose_code: string; granted_at: string | null; expires_at: string | null; sources_authorized: string[]; provider_key: string | null; consent_reference: string | null; stage?: string | null; captured_via?: string | null; acceptance?: Record<string, unknown> | null }>;
   cases: Array<{ id: string; case_code: string; title: string; status: string; priority: string; assigned_to: string | null; opened_at: string; assignee?: { full_name: string } | null }>;
   staff: Array<{ user_id: string; full_name: string; role: string }>;
   sensitive: {
@@ -85,7 +85,7 @@ export async function getClient360(db: Db, id: string): Promise<Client360 | null
     client.latest_run_id ? db.from('verification_runs').select('*').eq('id', client.latest_run_id).maybeSingle() : Promise.resolve({ data: null }),
     db.from('verification_runs').select('id,run_seq,snapshot_label,status,completed_at,ingested_at,provider_key,verification_id').eq('client_id', id).order('run_seq', { ascending: false }),
     db.from('risk_signals').select('*').eq('client_id', id).order('severity', { ascending: false }).order('updated_at', { ascending: false }),
-    db.from('consents').select('id,status,purpose,purpose_code,granted_at,expires_at,sources_authorized,provider_key,consent_reference').eq('client_id', id).order('created_at', { ascending: false }),
+    db.from('consents').select('id,status,purpose,purpose_code,granted_at,expires_at,sources_authorized,provider_key,consent_reference,stage,captured_via,acceptance').eq('client_id', id).order('created_at', { ascending: false }),
     db.from('cases').select('id,case_code,title,status,priority,assigned_to,opened_at,assignee:staff_profiles!cases_assigned_to_fkey(full_name)').eq('client_id', id).order('opened_at', { ascending: false }),
     db.from('staff_profiles').select('user_id,full_name,role').eq('is_active', true).order('full_name'),
   ]);

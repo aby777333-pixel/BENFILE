@@ -188,6 +188,33 @@ export async function resolveDispute(form: FormData): Promise<ActionResult> {
   });
 }
 
+/* ---------------- Prospect + portal consent link ---------------- */
+/**
+ * Creates a prospect record with NO verification data and no consent, and mints a portal link so
+ * the person can accept Part A (preliminary screening) on their own device. Nothing is looked up
+ * until that acceptance is recorded.
+ */
+export async function createProspect(form: FormData): Promise<ActionResult & { link?: string; clientId?: string }> {
+  try {
+    const displayName = z.string().min(2).max(120).parse(String(form.get('displayName') ?? '').trim());
+    const city = z.string().max(80).optional().parse(form.get('city') ? String(form.get('city')).trim() : undefined);
+    const days = z.coerce.number().int().min(1).max(30).parse(form.get('days') ?? 7);
+    const { db, staff } = await guard('clients:write');
+    if (!hasPermission(staff.role, 'documents:request')) throw new Error('Your role cannot issue portal links');
+    const { data: client, error } = await db.from('clients').insert({ display_name: displayName, city: city || null, status: 'PENDING', consent_status: 'PENDING', created_by: staff.userId, assigned_to: staff.userId }).select('id,client_code').single();
+    if (error || !client) throw new Error(error?.message ?? 'Could not create prospect');
+    const { data: token, error: tErr } = await db.rpc('mint_portal_token', { p_client_id: client.id, p_days: days });
+    if (tErr) throw new Error(tErr.message);
+    await audit(db, { action: 'client.prospect_create', clientId: client.id, entityTable: 'clients', entityId: client.id, details: { portalDays: days, consentStage: 'PRELIMINARY_PENDING' } });
+    await db.from('intelligence_events').insert({ client_id: client.id, event_type: 'PROSPECT', title: 'Prospect created - awaiting Part A consent via portal', detail: `Portal link valid ${days} days. No verification or search runs until the person accepts.`, source_key: 'STAFF', actor_id: staff.userId });
+    revalidatePath('/clients');
+    revalidatePath('/dashboard');
+    return { ok: true, message: `Prospect ${client.client_code} created. Share the link with the person only.`, link: `/portal/${token as string}`, clientId: client.id };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /* ---------------- Consent ---------------- */
 export async function recordConsent(form: FormData): Promise<ActionResult> {
   return wrap(async () => {

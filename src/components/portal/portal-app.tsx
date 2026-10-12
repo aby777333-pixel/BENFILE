@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { browserSupabase } from '@/lib/db/browser';
 import { Logo } from '@/components/ui/logo';
+import { CONSENT_STAGES, CONSENT_TERMS_VERSION, stageStatuses, type ConsentStage } from '@/lib/portal/consent-stages';
 
 type DocRequest = { id: string; documentType: string; reason: string | null; status: string; requestedAt: string };
 type PortalDoc = { id: string; docType: string; title: string; status: string; uploadedAt: string };
 type Submission = { id: string; kind: string; status: string; createdAt: string };
-type Consent = { id: string; purpose: string; status: string; grantedAt: string | null; expiresAt: string | null; sources: string[] };
+type Consent = { id: string; purpose: string; purposeCode?: string | null; stage?: string | null; status: string; grantedAt: string | null; expiresAt: string | null; sources: string[]; reference?: string | null; capturedVia?: string | null };
 type PortalContext = {
   clientId: string;
   clientCode: string;
@@ -165,6 +166,86 @@ function SubmitForm({ token, kind, onDone, children, label = 'Send to my relatio
   );
 }
 
+/**
+ * One stage of the two-stage consent (Part A preliminary screening / Part B full verification).
+ * The person ticks categories, types their name as signature and accepts. The server clamps the
+ * categories to what the stage permits and records the acceptance as evidence.
+ */
+function ConsentStageForm({ token, stage, onDone }: { token: string; stage: ConsentStage; onDone: () => Promise<void> }) {
+  const def = CONSENT_STAGES[stage];
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Msg | null>(null);
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const sources = fd.getAll('sources').map(String);
+    const fullName = String(fd.get('full_name') ?? '').trim();
+    if (!sources.length) {
+      setMsg({ ok: false, text: 'Please tick at least one category.' });
+      return;
+    }
+    if (fullName.length < 3) {
+      setMsg({ ok: false, text: 'Please type your full name as your signature.' });
+      return;
+    }
+    if (fd.get('agree') !== 'yes') {
+      setMsg({ ok: false, text: 'Please confirm the declaration.' });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    const { error } = await browserSupabase().rpc('portal_consent', { p_token: token, p_stage: stage, p_sources: sources, p_full_name: fullName, p_user_agent: navigator.userAgent, p_terms_version: CONSENT_TERMS_VERSION });
+    if (error) {
+      setMsg({ ok: false, text: /full name|tick at least/i.test(error.message) ? error.message : friendly(error.message) });
+      setBusy(false);
+      return;
+    }
+    setMsg({ ok: true, text: 'Thank you - your consent has been recorded.' });
+    await onDone();
+    setBusy(false);
+  }
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <p className="text-ink-200">{def.summary}</p>
+      <div>
+        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-300">What I authorise (untick anything you do not agree to)</div>
+        <div className="space-y-1.5">
+          {def.sources.map((s) => (
+            <label key={s.key} className="flex items-start gap-2 rounded-md border border-white/[0.06] bg-ink-900 p-2 text-sm text-ink-200">
+              <input type="checkbox" name="sources" value={s.key} defaultChecked={s.default} className="mt-0.5 accent-gold-500" />
+              <span>
+                <span className="font-medium text-ink-100">{s.label}</span>
+                <span className="block text-xs text-ink-400">{s.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-md border border-white/[0.06] bg-ink-900 p-3 text-xs text-ink-300">
+        <div className="mb-1 font-semibold text-ink-200">What we will not do under this consent</div>
+        <ul className="list-disc space-y-0.5 pl-4">
+          {def.notDone.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+        <p className="mt-2">
+          Valid for {def.validityDays} days. You can withdraw at any time from this page. Every finding is reviewed by a named analyst; a name match alone is never treated as a fact about you. Terms version {CONSENT_TERMS_VERSION}.
+        </p>
+      </div>
+      <Field label="Your full name (as on PAN) - this is your signature">
+        <input name="full_name" className="input" required minLength={3} autoComplete="name" />
+      </Field>
+      <label className="flex items-start gap-2 text-sm text-ink-200">
+        <input type="checkbox" name="agree" value="yes" className="mt-0.5 accent-gold-500" required /> <span>{def.agreementText}</span>
+      </label>
+      <Notice msg={msg} />
+      <button className="btn btn-primary" disabled={busy}>
+        {busy ? 'Recording...' : `I agree to ${def.title}`}
+      </button>
+    </form>
+  );
+}
+
 function UploadForm({ token, clientId, onDone }: { token: string; clientId: string; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
@@ -261,6 +342,8 @@ export function PortalApp({ token }: { token: string }) {
     );
 
   const consentLabel: Record<string, string> = { GRANTED: 'Consent given', PENDING: 'Consent not yet recorded', EXPIRED: 'Consent expired', WITHDRAWN: 'Consent withdrawn' };
+  const stages = stageStatuses(ctx.consents);
+  const active = ctx.consents.filter((c) => c.status === 'GRANTED' && (!c.expiresAt || new Date(c.expiresAt) > new Date()));
   const submissions = [...ctx.submissions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const documents = [...ctx.documents].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
 
@@ -284,18 +367,39 @@ export function PortalApp({ token }: { token: string }) {
         </div>
       </Section>
 
-      <Section title="Consent" hint={consentLabel[ctx.consentStatus] ?? ctx.consentStatus}>
-        <div className="space-y-3">
-          {ctx.consents.length === 0 && <p className="text-ink-300">No consent record found.</p>}
-          {ctx.consents.map((c) => (
-            <div key={c.id} className="rounded-md border border-white/[0.06] bg-ink-900 p-3">
-              <div className="font-medium">{c.purpose}</div>
-              <div className="mt-1 text-xs text-ink-300">
-                {consentLabel[c.status] ?? c.status} · given {fmtDate(c.grantedAt)} · valid until {fmtDate(c.expiresAt)}
-              </div>
-              {c.sources?.length > 0 && <div className="mt-1 text-xs text-ink-400">Covers: {c.sources.join(', ').toLowerCase()}</div>}
+      <Section title={stages.PRELIMINARY.granted || stages.FULL.granted ? 'Consent' : 'Step 1 - Your consent'} hint={stages.FULL.granted ? 'Part B full verification in force' : stages.PRELIMINARY.granted ? 'Part A preliminary screening in force' : 'Please accept Part A before we can proceed'} open={!stages.PRELIMINARY.granted && !stages.FULL.granted}>
+        <div className="space-y-4">
+          {active.length > 0 && (
+            <div className="space-y-2">
+              {active.map((c) => (
+                <div key={c.id} className="rounded-md border border-verified/30 bg-verified/5 p-3">
+                  <div className="font-medium">{c.purpose}</div>
+                  <div className="mt-1 text-xs text-ink-300">
+                    {consentLabel[c.status] ?? c.status} · given {fmtDate(c.grantedAt)} · valid until {fmtDate(c.expiresAt)}
+                    {c.reference ? ` · ref ${c.reference}` : ''}
+                  </div>
+                  {c.sources?.length > 0 && <div className="mt-1 text-xs text-ink-400">Covers: {c.sources.join(', ').toLowerCase()}</div>}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+          {!stages.FULL.granted && !stages.PRELIMINARY.granted && (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-ink-100">{CONSENT_STAGES.PRELIMINARY.title}</h3>
+              <ConsentStageForm token={token} stage="PRELIMINARY" onDone={load} />
+            </div>
+          )}
+          {!stages.FULL.granted && (
+            <details className="rounded-md border border-white/[0.08] p-3" open={stages.PRELIMINARY.granted}>
+              <summary className="cursor-pointer text-sm font-semibold text-ink-100">
+                {CONSENT_STAGES.FULL.title}
+                <span className="ml-2 text-xs font-normal text-ink-400">{stages.PRELIMINARY.granted ? 'Next step - needed before onboarding' : 'Optional now - usually completed at onboarding'}</span>
+              </summary>
+              <div className="mt-3">
+                <ConsentStageForm token={token} stage="FULL" onDone={load} />
+              </div>
+            </details>
+          )}
           <Notice msg={consentMsg} />
           {ctx.consentStatus === 'GRANTED' && (
             <button type="button" className="btn btn-danger" onClick={withdrawConsent}>

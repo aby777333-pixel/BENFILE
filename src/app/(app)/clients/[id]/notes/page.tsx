@@ -89,7 +89,14 @@ export default async function NotesPage({ params }: { params: Promise<{ id: stri
             <ul className="space-y-2 text-xs">
               {c360.consents.map((c) => (
                 <li key={c.id} className="rounded border border-white/[0.06] p-2">
-                  <div className="flex items-center justify-between"><StatusBadge status={c.status} /><span className="mono text-ink-400">{c.purpose_code}</span></div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5">
+                      <StatusBadge status={c.status} />
+                      {c.stage ? <Badge tone="gold">{c.stage === 'PRELIMINARY' ? 'Part A' : 'Part B'}</Badge> : null}
+                      {c.captured_via === 'CLIENT_PORTAL' ? <Badge tone="info" title={c.acceptance && typeof c.acceptance.signedName === 'string' ? `Signed as ${c.acceptance.signedName}` : undefined}>Accepted by client</Badge> : null}
+                    </span>
+                    <span className="mono text-ink-400">{c.purpose_code}</span>
+                  </div>
                   <div className="mt-1 text-ink-100">{c.purpose}</div>
                   <div className="mt-1 text-ink-400">Granted {formatDate(c.granted_at)}{c.expires_at ? ` - expires ${formatDate(c.expires_at)}` : ' - no expiry'}</div>
                   <div className="mono text-ink-300">{c.sources_authorized.join(', ') || 'no sources listed'}</div>

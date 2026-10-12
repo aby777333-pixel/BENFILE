@@ -7,6 +7,7 @@ import { listAdapters } from '@/lib/providers/registry';
 import { Panel } from '@/components/ui/panel';
 import { Badge } from '@/components/ui/badges';
 import { IngestForm } from '@/components/client360/ingest-form';
+import { ProspectForm } from '@/components/client360/prospect-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,12 @@ export default async function NewVerificationPage({ searchParams }: { searchPara
         <IngestForm clientId={existing?.id ?? null} samples={[{ label: 'Load full sample (Rohan Kumar Mehta)', json: sample }, { label: 'Load sparse / stale sample (Priya S. Nair)', json: sparse }]} />
       </Panel>
       <div className="space-y-4">
+        {!existing ? (
+          <Panel title="Start with consent - new prospect" right={<Badge tone="gold">Part A</Badge>}>
+            <p className="mb-3 text-xs text-ink-300">No details yet? Create the prospect and send them a secure link. They accept the Part A preliminary screening on their phone (PAN name match, phone / e-mail ownership, sanctions, public corporate, court and news records). Part B full verification is offered on the same link for onboarding.</p>
+            <ProspectForm />
+          </Panel>
+        ) : null}
         <Panel title="Provider adapters">
           <ul className="space-y-2 text-sm">
             {listAdapters().map((a) => (
