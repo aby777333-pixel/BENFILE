@@ -12,6 +12,7 @@ import { buildSubject, runExternalSearch } from '@/lib/external/orchestrator';
 import { detailsFromConsents, mergeSubjectDetails, parseProfileUrls, subjectFromProspect } from '@/lib/external/prospect-subject';
 import { compareTimeline, type TimelineEntry } from '@/lib/external/timeline';
 import { hasPermission, type Permission } from '@/lib/security/permissions';
+import { hashIdentifier, maskEmail, maskPhone, normalizeEmail, normalizePhone } from '@/lib/security/masking';
 import type { CanonicalProfile } from '@/lib/canonical/types';
 import { ingestVerification } from '@/lib/db/ingest';
 
@@ -196,22 +197,43 @@ export async function resolveDispute(form: FormData): Promise<ActionResult> {
  * the person can accept Part A (preliminary screening) on their own device. Nothing is looked up
  * until that acceptance is recorded.
  */
-export async function createProspect(form: FormData): Promise<ActionResult & { link?: string; clientId?: string }> {
+export async function createProspect(form: FormData): Promise<ActionResult & { link?: string; clientId?: string; contactSealed?: boolean }> {
   try {
     const displayName = z.string().min(2).max(120).parse(String(form.get('displayName') ?? '').trim());
     const city = z.string().max(80).optional().parse(form.get('city') ? String(form.get('city')).trim() : undefined);
     const days = z.coerce.number().int().min(1).max(30).parse(form.get('days') ?? 7);
+    const phoneRaw = optText(form.get('phone'));
+    const emailRaw = optText(form.get('email'));
+    const phone = phoneRaw ? normalizePhone(phoneRaw) : null;
+    if (phoneRaw && (!phone || phone.length !== 10)) throw new Error('Mobile number must be a 10-digit Indian mobile (country code optional).');
+    const email = emailRaw ? z.string().email('E-mail address is not valid').max(160).parse(normalizeEmail(emailRaw)) : null;
     const { db, staff } = await guard('clients:write');
     if (!hasPermission(staff.role, 'documents:request')) throw new Error('Your role cannot issue portal links');
     const { data: client, error } = await db.from('clients').insert({ display_name: displayName, city: city || null, status: 'PENDING', consent_status: 'PENDING', created_by: staff.userId, assigned_to: staff.userId }).select('id,client_code').single();
     if (error || !client) throw new Error(error?.message ?? 'Could not create prospect');
+
+    // Contact details: masked + hashed on the client row; the full value is sealed in sensitive_values
+    // (audited reveal) when the role may store sensitive values. Never written anywhere else.
+    const canSeal = hasPermission(staff.role, 'verification:ingest');
+    const seal = async (kind: 'PHONE' | 'EMAIL', value: string) => {
+      if (!canSeal) return null;
+      const { data, error: sErr } = await db.rpc('store_sensitive', { p_client_id: client.id, p_run_id: null, p_kind: kind, p_entity_table: 'clients', p_field_key: kind === 'PHONE' ? 'contact_phone' : 'contact_email', p_value_full: value, p_value_hash: hashIdentifier(kind, value) });
+      return sErr ? null : (data as string);
+    };
+    if (phone || email) {
+      const update: Record<string, unknown> = {};
+      if (phone) Object.assign(update, { contact_phone_masked: maskPhone(phone), contact_phone_hash: hashIdentifier('PHONE', phone), contact_phone_sensitive_id: await seal('PHONE', phone) });
+      if (email) Object.assign(update, { contact_email_masked: maskEmail(email), contact_email_hash: hashIdentifier('EMAIL', email), contact_email_sensitive_id: await seal('EMAIL', email) });
+      const { error: uErr } = await db.from('clients').update(update).eq('id', client.id);
+      if (uErr) throw new Error(uErr.message);
+    }
     const { data: token, error: tErr } = await db.rpc('mint_portal_token', { p_client_id: client.id, p_days: days });
     if (tErr) throw new Error(tErr.message);
-    await audit(db, { action: 'client.prospect_create', clientId: client.id, entityTable: 'clients', entityId: client.id, details: { portalDays: days, consentStage: 'PRELIMINARY_PENDING' } });
+    await audit(db, { action: 'client.prospect_create', clientId: client.id, entityTable: 'clients', entityId: client.id, details: { portalDays: days, consentStage: 'PRELIMINARY_PENDING', contact: { phone: !!phone, email: !!email, sealed: canSeal } } });
     await db.from('intelligence_events').insert({ client_id: client.id, event_type: 'PROSPECT', title: 'Prospect created - awaiting Part A consent via portal', detail: `Portal link valid ${days} days. No verification or search runs until the person accepts.`, source_key: 'STAFF', actor_id: staff.userId });
     revalidatePath('/clients');
     revalidatePath('/dashboard');
-    return { ok: true, message: `Prospect ${client.client_code} created. Share the link with the person only.`, link: `/portal/${token as string}`, clientId: client.id };
+    return { ok: true, message: `Prospect ${client.client_code} created. Share the link with the person only.`, link: `/portal/${token as string}`, clientId: client.id, contactSealed: canSeal };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

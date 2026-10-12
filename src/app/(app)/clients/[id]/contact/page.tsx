@@ -10,9 +10,30 @@ import { DisputeButton } from '@/components/client360/dispute-button';
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { c360, role } = await loadClient(id, 'contact');
-  const { run, sensitive } = c360;
-  if (!run?.assessment) return <Empty>No verification run yet.</Empty>;
+  const { run, sensitive, client } = c360;
   const canReveal = hasPermission(role, 'sensitive:reveal');
+  const declared = (
+    <Panel title="Contact given at prospect creation" right={<Badge tone="declared">Client declared</Badge>}>
+      {client.contact_phone_masked || client.contact_email_masked ? (
+        <dl className="kv">
+          <dt>Mobile</dt>
+          <dd>{client.contact_phone_masked ? <MaskedValue masked={client.contact_phone_masked} sensitiveId={client.contact_phone_sensitive_id} canReveal={canReveal} /> : <span className="text-ink-400">Not given</span>}</dd>
+          <dt>E-mail</dt>
+          <dd>{client.contact_email_masked ? <MaskedValue masked={client.contact_email_masked} sensitiveId={client.contact_email_sensitive_id} canReveal={canReveal} /> : <span className="text-ink-400">Not given</span>}</dd>
+        </dl>
+      ) : (
+        <p className="text-sm text-ink-400">No contact details were captured when the prospect was created.</p>
+      )}
+      <p className="mt-2 text-[11px] text-ink-500">Entered by the relationship manager when the portal link was issued. Not verified until a one-time-code or provider check confirms ownership under the client&apos;s consent.</p>
+    </Panel>
+  );
+  if (!run?.assessment)
+    return (
+      <div className="space-y-4">
+        {declared}
+        <Empty>No verification run yet.</Empty>
+      </div>
+    );
   const m = run.canonical.mobile;
   const risk = run.canonical.providerRisk;
   const checks = run.assessment.identityChecks.filter((c) => c.key.startsWith('phone.') || c.key.startsWith('email.'));
@@ -20,6 +41,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   return (
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="space-y-4 xl:col-span-2">
+        {client.contact_phone_masked || client.contact_email_masked ? declared : null}
         <Panel title="Phone numbers" right={<span className="text-[11px] text-ink-400">Each number shows the source it is linked to</span>}>
           {sensitive.phones.length ? (
             <table className="table">

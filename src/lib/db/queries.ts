@@ -21,6 +21,11 @@ export interface ClientRow {
   assigned_to: string | null;
   created_at: string;
   updated_at: string;
+  /** Contact captured at prospect creation (masked; full value sealed in sensitive_values). */
+  contact_phone_masked?: string | null;
+  contact_phone_sensitive_id?: string | null;
+  contact_email_masked?: string | null;
+  contact_email_sensitive_id?: string | null;
 }
 
 export interface RunRow {
