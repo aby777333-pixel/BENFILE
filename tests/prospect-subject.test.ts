@@ -22,6 +22,7 @@ describe('prospect subject (Part A, no verification run)', () => {
     expect(s.employers).toEqual(['Freshworks']);
     expect(s.cities).toEqual(['Chennai']);
     expect(s.dob).toBe('1984-03-09');
+    expect(subjectFromProspect({ display_name: 'A', city: 'Chennai' }, { city: 'Changanassery' }, { city: 'Chennai, Kottayam' }).cities).toEqual(['Chennai', 'Kottayam', 'Changanassery']);
     expect(s.websites).toEqual(['https://linkedin.com/in/ag']);
     expect(s.pan).toBeNull();
     expect(s.emails).toEqual([]);

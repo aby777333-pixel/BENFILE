@@ -19,6 +19,12 @@ export interface ProspectDetails {
 
 const clean = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+/** "Chennai, Kottayam" -> ["Chennai", "Kottayam"]; also accepts an array. */
+export function splitCities(v: unknown): string[] {
+  const parts = Array.isArray(v) ? v.map(String) : typeof v === 'string' ? v.split(/[,;/\n]+/) : [];
+  return [...new Set(parts.map((p) => p.trim()).filter(Boolean))];
+}
+
 /** Normalise a free-text list of URLs / handles into https URLs; drops anything that is not a URL. */
 export function parseProfileUrls(raw: unknown): string[] {
   const parts = Array.isArray(raw) ? raw.map(String) : typeof raw === 'string' ? raw.split(/[\s,]+/) : [];
@@ -51,14 +57,15 @@ export function detailsFromConsents(consents: Array<{ status: string; acceptance
 
 export function subjectFromProspect(client: { display_name: string; city?: string | null; occupation?: string | null }, consentDetails: ProspectDetails = {}, formDetails: ProspectDetails = {}): SubjectIdentity {
   const employer = clean(formDetails.employer) ?? clean(consentDetails.employer);
-  const city = clean(formDetails.city) ?? clean(consentDetails.city) ?? clean(client.city);
+  // Cities are a union: a person can have a current city and a home town on record, and either may appear in a public record.
+  const cities = [...new Set([...splitCities(formDetails.city), ...splitCities(consentDetails.city), ...splitCities(client.city)])];
   const dob = clean(formDetails.dob) ?? clean(consentDetails.dob);
   const websites = [...new Set([...(formDetails.profiles ?? []), ...(consentDetails.profiles ?? [])])];
   return {
     fullName: clean(client.display_name),
     employers: employer ? [employer] : [],
     occupation: clean(formDetails.occupation) ?? clean(consentDetails.occupation) ?? clean(client.occupation),
-    cities: city ? [city] : [],
+    cities,
     emails: [],
     phones: [],
     emailHashes: [],
@@ -74,11 +81,10 @@ export function subjectFromProspect(client: { display_name: string; city?: strin
 /** Merge analyst-entered details into a subject built from a verification run (adds, never overrides verified facts). */
 export function mergeSubjectDetails(subject: SubjectIdentity, details: ProspectDetails): SubjectIdentity {
   const employer = clean(details.employer);
-  const city = clean(details.city);
   return {
     ...subject,
     employers: employer && !subject.employers.includes(employer) ? [...subject.employers, employer] : subject.employers,
-    cities: city && !subject.cities.includes(city) ? [...subject.cities, city] : subject.cities,
+    cities: [...new Set([...subject.cities, ...splitCities(details.city)])],
     dob: subject.dob ?? (clean(details.dob) && /^\d{4}-\d{2}-\d{2}$/.test(details.dob!) ? details.dob! : null),
     websites: [...new Set([...(subject.websites ?? []), ...(details.profiles ?? [])])],
   };

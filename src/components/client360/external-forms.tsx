@@ -17,7 +17,7 @@ export function ExternalSearchForm({ clientId, connectors, hasRun, prefill }: { 
         <div className="grid gap-2 sm:grid-cols-2">
           <input name="employer" className="input" placeholder="Current employer / business" defaultValue={prefill?.employer ?? ''} />
           <input name="occupation" className="input" placeholder="Occupation" defaultValue={prefill?.occupation ?? ''} />
-          <input name="city" className="input" placeholder="City" defaultValue={prefill?.city ?? ''} />
+          <input name="city" className="input" placeholder="Cities, comma separated (e.g. Chennai, Kottayam)" defaultValue={prefill?.city ?? ''} />
           <input name="dob" type="date" className="input" defaultValue={prefill?.dob ?? ''} />
         </div>
         <textarea name="profiles" className="input mt-2 min-h-14" placeholder="Nominated public profile URLs, one per line" defaultValue={(prefill?.profiles ?? []).join('\n')} />
