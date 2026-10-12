@@ -86,7 +86,7 @@ export function StatusBadge({ status }: { status: string }) {
     ? 'good'
     : ['NEEDS_REVIEW', 'PARTIAL', 'IN_REVIEW', 'AWAITING_CLIENT', 'PENDING', 'OPEN', 'POSSIBLE', 'FLAGGED', 'UNREVIEWED'].includes(status)
       ? 'warn'
-      : ['REJECTED', 'FAILED', 'ESCALATED', 'WITHDRAWN', 'EXPIRED', 'MISMATCH'].includes(status)
+      : ['REJECTED', 'FAILED', 'ESCALATED', 'WITHDRAWN', 'EXPIRED', 'MISMATCH', 'SUPERSEDED'].includes(status)
         ? 'bad'
         : 'neutral';
   return <Badge tone={tone}>{status.replace(/_/g, ' ')}</Badge>;

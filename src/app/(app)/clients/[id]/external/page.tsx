@@ -102,7 +102,7 @@ export default async function ExternalPage({ params, searchParams }: { params: P
                 const data = (f.data ?? {}) as Record<string, unknown>;
                 const reasons = (f.match_reasons as { reasons?: string[]; gaps?: string[] }) ?? {};
                 return (
-                  <li key={f.id} className={`rounded-lg border p-3 ${f.review_status === 'ADDED' ? 'border-verified/30 bg-verified/5' : f.review_status === 'REJECTED' ? 'border-white/[0.05] opacity-60' : f.review_status === 'FLAGGED' ? 'border-amber-400/30' : 'border-white/[0.07] bg-ink-900'}`}>
+                  <li key={f.id} className={`rounded-lg border p-3 ${f.review_status === 'ADDED' ? 'border-verified/30 bg-verified/5' : f.review_status === 'REJECTED' || f.review_status === 'SUPERSEDED' ? 'border-white/[0.05] opacity-60' : f.review_status === 'FLAGGED' ? 'border-amber-400/30' : 'border-white/[0.07] bg-ink-900'}`}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">

@@ -37,6 +37,11 @@ export function configuredFactories(env: Env = process.env): LiveConnectorFactor
   return LIVE_CONNECTOR_FACTORIES.filter((f) => f.envVars.every((k) => !!env[k]?.trim()));
 }
 
+/** Keys of sandbox connectors that a configured live connector has replaced. */
+export function supersededSandboxKeys(env: Env = process.env): string[] {
+  return [...new Set(configuredFactories(env).flatMap((f) => f.supersedes))];
+}
+
 /** Sandbox connectors + configured live connectors, with superseded sandboxes removed. */
 export function composeRegistry(sandbox: ExternalConnector[], env: Env = process.env): ExternalConnector[] {
   const live = configuredFactories(env);

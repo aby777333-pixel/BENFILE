@@ -10,6 +10,7 @@ import { audit } from '@/lib/db/audit';
 import { getStaff } from '@/lib/db/server';
 import { buildSubject, runExternalSearch } from '@/lib/external/orchestrator';
 import { detailsFromConsents, mergeSubjectDetails, parseProfileUrls, subjectFromProspect } from '@/lib/external/prospect-subject';
+import { supersededSandboxKeys } from '@/lib/external/live';
 import { compareTimeline, type TimelineEntry } from '@/lib/external/timeline';
 import { hasPermission, type Permission } from '@/lib/security/permissions';
 import { hashIdentifier, maskEmail, maskPhone, normalizeEmail, normalizePhone } from '@/lib/security/masking';
@@ -334,11 +335,18 @@ export async function runExternalIntelligence(form: FormData): Promise<ActionRes
         if (!error) rescored++;
       }
     }
+    // Sandbox findings from connectors that a live connector has now replaced: retire them from the review queue.
+    let superseded = 0;
+    const retired = supersededSandboxKeys();
+    if (retired.length) {
+      const { data: rows } = await db.from('external_findings').update({ review_status: 'SUPERSEDED', review_note: 'Illustrative sandbox record retired - a licensed live connector now covers this source.', reviewed_by: staff.userId, reviewed_at: new Date().toISOString() }).eq('client_id', clientId).eq('review_status', 'PENDING').in('connector_key', retired).select('id');
+      superseded = rows?.length ?? 0;
+    }
     await db.from('refresh_schedules').upsert({ client_id: clientId, last_checked_at: new Date().toISOString(), next_permitted_at: new Date(Date.now() + 90 * 86_400_000).toISOString(), sources_checked: result.connectorsRun, authorized_until: consent.expires_at, consent_id: consent.id, updated_at: new Date().toISOString() });
     await audit(db, { action: 'external.search', clientId, entityTable: 'external_searches', entityId: search.id, details: { purpose, connectors: result.connectorsRun, findings: result.findings.length, added, rescored, skipped: result.connectorsSkipped, matchingDetails: { employer: !!formDetails.employer, occupation: !!formDetails.occupation, city: !!formDetails.city, dob: !!formDetails.dob, profiles: formDetails.profiles.length }, subjectFromRun: !!client.latest_run_id } });
     await db.from('intelligence_events').insert({ client_id: clientId, event_type: 'EXTERNAL_SEARCH', title: `External intelligence search run (${result.findings.length} findings)`, detail: `Connectors: ${result.connectorsRun.join(', ')}${result.connectorsSkipped.length ? `; skipped: ${result.connectorsSkipped.map((s) => s.key).join(', ')}` : ''}`, source_key: 'EXTERNAL', actor_id: staff.userId });
     revalidate(clientId);
-    return `${result.findings.length} findings retrieved (${added} new, ${rescored} re-scored with the latest matching details). ${result.summary.reviewRequired} require human review.`;
+    return `${result.findings.length} findings retrieved (${added} new, ${rescored} re-scored with the latest matching details${superseded ? `, ${superseded} sandbox record${superseded === 1 ? '' : 's'} retired` : ''}). ${result.summary.reviewRequired} require human review.`;
   });
 }
 
