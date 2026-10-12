@@ -47,6 +47,18 @@ reveals go through an audited RPC. Search by PAN / phone / e-mail / UAN uses SHA
   freshness windows), `/portal/[token]` client self-service (uploads, declarations, consent withdrawal).
 - Schema: `supabase/migrations/0002_wealth_os.sql`. Seed: `npx tsx scripts/seed-phase2.ts`.
 
+## Phase 3 - Licensed API integration layer
+
+- **Catalogue** (`src/lib/integrations/catalog.ts`, 75 APIs from `docs/BENFILE_APIS.pdf`) with commercial status
+  (`pricing.ts`) and live status derived from which server env vars are set. Shown on `/admin`.
+- **Hardened HTTP client** (`integrations/http.ts`): timeout, bounded retry on 429/5xx, per-provider rate limit,
+  secret scrubbing, injectable `fetch` for tests.
+- **Live connectors** (`src/lib/external/live`): OpenSanctions, Dilisense, ComplyAdvantage (screening), eCourtsIndia
+  (legal), Attestr (MCA / directors), Brave (web + news), LandLens (Tamil Nadu guideline value, approvals, road width).
+  Each switches on when its env var exists and replaces the matching sandbox connector; findings still flow through
+  consent, entity resolution, media classification and human review.
+- Docs: `docs/INTEGRATIONS.md` (how to wire more) and `docs/PURCHASE_LIST.md` (what to buy, what cannot be bought).
+
 ## Run locally
 
 ```bash
@@ -73,10 +85,10 @@ Password for all demo accounts is set in `.env.local` (`BENFILE_SEED_PASSWORD`).
 
 ## Sandbox connectors
 
-No licensed government / registry / bureau / court / media API credentials are configured. The external connectors
-in `src/lib/external/sandbox-connectors.ts` return deterministic illustrative records (labelled **Sandbox** in the UI)
-so the full orchestration, entity-resolution and review workflow can be exercised. Replace them with live connectors
-implementing the same `ExternalConnector` interface.
+Until a provider credential is set, the external connectors in `src/lib/external/sandbox-connectors.ts` return
+deterministic illustrative records (labelled **Sandbox** in the UI) so the full orchestration, entity-resolution and
+review workflow can be exercised. Setting the env var for a live connector (see `.env.example` and
+`docs/INTEGRATIONS.md`) replaces that sandbox automatically.
 
 ## Database
 

@@ -9,6 +9,7 @@
 import type { CanonicalProfile } from '@/lib/canonical/types';
 import { requiresHumanReview, resolveEntity, type MatchResult, type SubjectIdentity } from '@/lib/engines/entity-resolution';
 import { classifyMedia } from '@/lib/engines/media';
+import { composeRegistry } from './live';
 import { SANDBOX_CONNECTORS } from './sandbox-connectors';
 import type { ConnectorCapability, ConnectorContext, ExternalConnector, RawFinding } from './types';
 
@@ -34,12 +35,27 @@ export interface OrchestrationResult {
   summary: Record<string, number>;
 }
 
-const registry: ExternalConnector[] = [...SANDBOX_CONNECTORS];
-export function listConnectors(): ExternalConnector[] {
+/**
+ * Registry = configured LIVE connectors (src/lib/external/live) + the sandbox
+ * connectors they do not supersede. Built lazily so tests and builds without
+ * provider credentials keep the deterministic sandbox behaviour.
+ */
+let registry: ExternalConnector[] | null = null;
+const extra: ExternalConnector[] = [];
+function getRegistry(): ExternalConnector[] {
+  if (!registry) registry = [...composeRegistry(SANDBOX_CONNECTORS), ...extra];
   return registry;
 }
+export function listConnectors(): ExternalConnector[] {
+  return getRegistry();
+}
 export function registerConnector(c: ExternalConnector) {
-  if (!registry.some((x) => x.key === c.key)) registry.push(c);
+  if (!extra.some((x) => x.key === c.key)) extra.push(c);
+  registry = null;
+}
+/** Test hook - rebuild the registry from the current environment. */
+export function resetConnectorRegistry() {
+  registry = null;
 }
 
 /** Builds the matching subject from the canonical profile (masked profile is fine; hashes are passed separately). */
@@ -70,7 +86,8 @@ export async function runExternalSearch(
 ): Promise<OrchestrationResult> {
   const now = opts.now ?? new Date();
   const ctx: ConnectorContext = { purpose: opts.purpose, consentSources: opts.consentSources, maxResults: opts.maxResults ?? 25, now };
-  const wanted = opts.connectorKeys?.length ? registry.filter((c) => opts.connectorKeys!.includes(c.key)) : registry;
+  const all = getRegistry();
+  const wanted = opts.connectorKeys?.length ? all.filter((c) => opts.connectorKeys!.includes(c.key)) : all;
   const connectorsRun: string[] = [];
   const connectorsSkipped: OrchestrationResult['connectorsSkipped'] = [];
   const raw: Array<{ c: ExternalConnector; f: RawFinding }> = [];

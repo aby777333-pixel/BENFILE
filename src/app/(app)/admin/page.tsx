@@ -9,6 +9,7 @@ import { formatDateTime } from '@/lib/engines/normalize';
 import { Panel } from '@/components/ui/panel';
 import { Badge, ModeBadge } from '@/components/ui/badges';
 import { ScoringForm, StaffRoleForm } from '@/components/client360/admin-forms';
+import { IntegrationsPanel } from '@/components/admin/integrations-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,7 +128,7 @@ export default async function AdminPage() {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-[11px] text-ink-500">Sandbox connectors are placeholders implementing the connector interface (searchPerson, verifyIdentity, searchCompanies, searchDirectorships, searchEmployment, searchLegalRecords, searchMedia, searchProfessionalProfiles, searchPublicSocialProfiles, searchSanctions, searchAssets, refreshProfile). Replace with licensed APIs without touching the UI.</p>
+            <p className="mt-2 text-[11px] text-ink-500">Sandbox connectors are placeholders implementing the connector interface (searchPerson, verifyIdentity, searchCompanies, searchDirectorships, searchEmployment, searchLegalRecords, searchMedia, searchProfessionalProfiles, searchPublicSocialProfiles, searchSanctions, searchAssets, refreshProfile). A live connector (src/lib/external/live) replaces its sandbox automatically once its credentials are set - see the integration catalogue below.</p>
           </Panel>
           <Panel title="Retention policies" right={<Badge tone="muted">{retention?.length ?? 0}</Badge>}>
             <table className="table">
@@ -154,6 +155,7 @@ export default async function AdminPage() {
           </Panel>
         </div>
       </div>
+      <IntegrationsPanel />
     </div>
   );
 }

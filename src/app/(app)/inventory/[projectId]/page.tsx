@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getStaff } from '@/lib/db/server';
 import { hasPermission } from '@/lib/security/permissions';
-import { holdPlot, updatePlotPrice, upsertDdItem } from '@/lib/actions-wealth';
+import { holdPlot, refreshGuidelineValue, updatePlotPrice, upsertDdItem } from '@/lib/actions-wealth';
+import { landLensFromEnv } from '@/lib/integrations/landlens';
 import { ddScorecard, type DdScorecard } from '@/lib/wealth/matching-engine';
 import type { DdItemRow, PlotRow, ProjectRow } from '@/lib/wealth/types';
 import { cr } from '@/lib/wealth/wealth-engine';
@@ -136,6 +137,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const scorecard = ddScorecard(dd, minimumItems);
   const ddByKey = new Map(dd.map((d) => [d.item_key, d]));
   const canWrite = hasPermission(staff.role, 'clients:write');
+  const landLensConfigured = landLensFromEnv() !== null;
 
   /* ---------------- Price intelligence ---------------- */
   const price = num(project.price_per_sqft);
@@ -281,6 +283,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               ['Discount rule', discountPct !== null ? `Negotiated discounts above ${discountPct}% of list price require senior approval (compliance rule sales.discount_approval_above_pct).` : 'Discount approval rule not configured.'],
             ]}
           />
+          {canWrite ? (
+            <ActionForm action={refreshGuidelineValue} className="mt-2 flex flex-wrap items-center gap-2" resetOnSuccess={false}>
+              <input type="hidden" name="projectId" value={project.id} />
+              <button type="submit" className="btn btn-sm" disabled={!landLensConfigured} title={landLensConfigured ? 'Fetch the official guideline value from LandLens (Tamil Nadu Registration Department rates)' : 'Set LANDLENS_API_KEY on the server to enable live guideline values'}>
+                Refresh guideline value from LandLens
+              </button>
+              <span className="text-[11px] text-ink-500">{landLensConfigured ? 'Live - Tamil Nadu guideline rates via LandLens (free tool, audited).' : 'LandLens not configured - enter the guideline value manually.'}</span>
+            </ActionForm>
+          ) : null}
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
               <div className="panel-title mb-1">Price history</div>

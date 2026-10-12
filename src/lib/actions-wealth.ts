@@ -15,6 +15,7 @@ import { detectAnomalies } from '@/lib/wealth/anomaly-engine';
 import { detectTriggers } from '@/lib/wealth/triggers';
 import { extractClaims, verifyClaim } from '@/lib/wealth/human-input-engine';
 import { preferencesFromFeedback } from '@/lib/wealth/matching-engine';
+import { fetchGuidelineValue, landLensFromEnv } from '@/lib/integrations/landlens';
 import type { ActionResult } from '@/lib/actions';
 
 async function guard(perm: Permission) {
@@ -538,5 +539,36 @@ export async function updatePlotPrice(form: FormData): Promise<ActionResult> {
     if (error) throw new Error(error.message);
     await audit(db, { action: 'plot.price', entityTable: 'plots', entityId: plotId, details: { negotiated, listPrice: plot?.price } });
     revalidatePath(`/inventory/${plot?.project_id}`);
+  });
+}
+
+/**
+ * Refresh a project's government guideline value from LandLens (catalogue 9.14).
+ * Writes the per-sq-ft rate to the project, appends an OFFICIAL_GUIDELINE comparable
+ * and audits the provider request id. Never overwrites when the provider returns no rate.
+ */
+export async function refreshGuidelineValue(form: FormData): Promise<ActionResult> {
+  return wrap(async () => {
+    const projectId = uuid.parse(form.get('projectId'));
+    const { db } = await guard('clients:write');
+    const ll = landLensFromEnv();
+    if (!ll) throw new Error('LandLens is not configured (LANDLENS_API_KEY). Enter the guideline value manually.');
+    const { data: project, error: pErr } = await db.from('projects').select('id,name,lat,lng,locality,city,district,state,survey_numbers,comparables,guideline_value_per_sqft').eq('id', projectId).single();
+    if (pErr || !project) throw new Error(pErr?.message ?? 'Project not found');
+    if (!/tamil\s*nadu/i.test(String(project.state ?? ''))) throw new Error('LandLens guideline values cover Tamil Nadu only.');
+    const survey = (project.survey_numbers as string[] | null)?.[0] ?? null;
+    const [surveyNumber, subDivision] = survey ? survey.split('/') : [null, null];
+    const lat = project.lat === null ? null : Number(project.lat);
+    const lng = project.lng === null ? null : Number(project.lng);
+    const r = await fetchGuidelineValue(ll, { lat, lng, surveyNumber, subDivision: subDivision ?? null, villageName: project.locality ?? project.city, districtName: project.district });
+    await audit(db, { action: 'project.guideline_value.fetch', entityTable: 'projects', entityId: projectId, details: { provider: 'landlens', requestId: r.requestId, perSqft: r.perSqft, reportedUnit: r.reportedUnit, reportedValue: r.reportedValue, classification: r.classification, village: r.village, sro: r.sro } });
+    if (r.perSqft === null) throw new Error(`LandLens returned no rate for this parcel${r.requestId ? ` (request ${r.requestId})` : ''}. Check the survey number / coordinates or enter the value manually.`);
+    const today = new Date().toISOString().slice(0, 10);
+    const comparables = [...((project.comparables as Array<Record<string, unknown>> | null) ?? []).filter((c) => c.source !== 'LandLens guideline_value'), { project: `Guideline value${r.village ? ` - ${r.village}` : ''}${r.classification ? ` (${r.classification})` : ''}`, price_per_sqft: r.perSqft, date: r.effectiveFrom ?? today, source: 'LandLens guideline_value' }];
+    const { error } = await db.from('projects').update({ guideline_value_per_sqft: r.perSqft, comparables, updated_at: new Date().toISOString() }).eq('id', projectId);
+    if (error) throw new Error(error.message);
+    revalidatePath(`/inventory/${projectId}`);
+    revalidatePath('/inventory');
+    return `Guideline value updated to INR ${Math.round(r.perSqft).toLocaleString('en-IN')} / sq ft${r.reportedUnit && r.reportedUnit !== 'sqft' ? ` (provider reported per ${r.reportedUnit})` : ''}.`;
   });
 }
