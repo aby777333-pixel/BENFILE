@@ -20,12 +20,65 @@ export interface DilisenseOptions {
   apiKey: string;
   fetchImpl?: typeof fetch;
   baseUrl?: string;
-  /** Optional adverse-media endpoint path (e.g. "/media/checkIndividual"). Off when unset. */
+  /**
+   * Adverse-media endpoint path. The Adverse Media Screening API is a separate Dilisense product
+   * (GET /media/checkIndividual); leave unset unless it is subscribed, otherwise the call returns 402/403
+   * and the orchestrator records the media capability as skipped while sanctions/PEP still run.
+   */
   mediaEndpoint?: string;
   fuzzy?: boolean;
 }
 
+export const DILISENSE_MEDIA_ENDPOINT = '/media/checkIndividual';
+
 const rid = (...parts: string[]) => createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 12);
+
+/** Dilisense expects dd/mm/yyyy (partial forms such as 00/00/1976 allowed). Accepts ISO or already-formatted input. */
+export function dilisenseDob(v: string | null | undefined): string | undefined {
+  if (!v) return undefined;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
+  const year = /^(\d{4})/.exec(v);
+  return year ? `00/00/${year[1]}` : undefined;
+}
+
+export interface MediaArticle {
+  category: string;
+  headline: string;
+  url: string | null;
+  snippet: string | null;
+  timestamp: string | null;
+  language: string | null;
+}
+
+/** Parse /media/checkIndividual: { total_hits, news_exposures: { <category>: { category, hits, articles[] } } }. */
+export function parseMediaExposures(payload: unknown): { totalHits: number; byCategory: Record<string, number>; articles: MediaArticle[] } {
+  const root = asRecord(payload);
+  const exposures = asRecord(root.news_exposures);
+  const byCategory: Record<string, number> = {};
+  const articles: MediaArticle[] = [];
+  const stripHtml = (s: string | null) => (s ? s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : null);
+  for (const [key, val] of Object.entries(exposures)) {
+    const cat = asRecord(val);
+    const category = asString(cat.category) ?? key;
+    byCategory[category] = asNumber(cat.hits) ?? asArray(cat.articles).length;
+    for (const a of asArray(cat.articles).map(asRecord)) {
+      const headline = pick(a, 'headline', 'title');
+      if (!headline) continue;
+      const body = stripHtml(pick(a, 'body', 'snippet'));
+      articles.push({ category, headline, url: pick(a, 'source_link', 'url'), snippet: body ? body.slice(0, 400) : null, timestamp: pick(a, 'timestamp', 'date'), language: pick(a, 'language') });
+    }
+  }
+  // Flat /media/search shape, for completeness.
+  for (const a of asArray(root.articles).map(asRecord)) {
+    const headline = pick(a, 'headline', 'title');
+    if (!headline) continue;
+    const body = stripHtml(pick(a, 'body', 'snippet'));
+    articles.push({ category: pick(a, 'category') ?? 'adverse_media', headline, url: pick(a, 'source_link', 'url'), snippet: body ? body.slice(0, 400) : null, timestamp: pick(a, 'timestamp', 'date'), language: pick(a, 'language') });
+  }
+  return { totalHits: asNumber(root.total_hits) ?? articles.length, byCategory, articles };
+}
 
 export interface DilisenseRecord {
   sourceType: string;
@@ -77,7 +130,7 @@ export function dilisenseConnector(o: DilisenseOptions): ExternalConnector {
       const res = await httpRequest(`${base}/checkIndividual`, {
         provider: 'dilisense',
         headers,
-        query: { names: name, dob: s.dob ?? undefined, fuzzy_search: o.fuzzy === false ? 0 : 1 },
+        query: { names: name, dob: dilisenseDob(s.dob), fuzzy_search: o.fuzzy === false ? undefined : 1 },
         fetchImpl: o.fetchImpl,
       });
       const { totalHits, records } = parseRecords(res.data);
@@ -116,28 +169,36 @@ export function dilisenseConnector(o: DilisenseOptions): ExternalConnector {
     },
     async searchMedia(s: SubjectIdentity, ctx: ConnectorContext): Promise<RawFinding[]> {
       if (!o.mediaEndpoint || !s.fullName) return [];
-      const res = await httpRequest(`${base}${o.mediaEndpoint.startsWith('/') ? '' : '/'}${o.mediaEndpoint}`, { provider: 'dilisense', headers, query: { names: s.fullName, dob: s.dob ?? undefined }, fetchImpl: o.fetchImpl });
-      const root = asRecord(res.data);
-      const list = [root.found_records, root.articles, root.results, root.media].map(asArray).find((a) => a.length) ?? [];
-      return list
-        .map(asRecord)
-        .slice(0, ctx.maxResults)
-        .map((a) => {
-          const url = pick(a, 'url', 'link', 'source_url');
-          const title = pick(a, 'title', 'headline') ?? 'Adverse media article';
-          return {
-            recordId: `news:${rid(url ?? title, s.fullName!)}`,
-            resultType: 'NEWS' as const,
-            title,
-            excerpt: pick(a, 'snippet', 'summary', 'description'),
-            url,
-            publishedAt: pick(a, 'date', 'published_at', 'publishedAt'),
-            sourceName: pick(a, 'source', 'publisher') ?? (url ? new URL(url).hostname : 'Dilisense adverse media'),
-            candidate: { name: pick(a, 'name') ?? s.fullName, dob: s.dob },
-            data: { categories: asArray(a.categories ?? a.topics).map((x) => asString(x)).filter(Boolean), sourceType: pick(a, 'source_type') },
-            category: 'MEDIA',
-          };
+      const res = await httpRequest(`${base}${o.mediaEndpoint.startsWith('/') ? '' : '/'}${o.mediaEndpoint}`, { provider: 'dilisense', headers, query: { names: s.fullName, fetch_articles: true }, fetchImpl: o.fetchImpl });
+      const { totalHits, byCategory, articles } = parseMediaExposures(res.data);
+      const out: RawFinding[] = articles.slice(0, ctx.maxResults).map((a) => ({
+        recordId: `news:${rid(a.url ?? a.headline, s.fullName!)}`,
+        resultType: 'NEWS' as const,
+        title: a.headline,
+        excerpt: a.snippet,
+        url: a.url,
+        publishedAt: a.timestamp,
+        sourceName: a.url ? new URL(a.url).hostname : 'Dilisense adverse media',
+        // Dilisense matches on the name within the article; nothing else is corroborated, so entity resolution scores it on name only.
+        candidate: { name: s.fullName },
+        data: { adverseMediaCategory: a.category, language: a.language, totalHits, hitsByCategory: byCategory },
+        category: 'MEDIA',
+      }));
+      if (!out.length && totalHits === 0) {
+        out.push({
+          recordId: `news-screen:${rid(s.fullName, ctx.now.toISOString().slice(0, 10))}`,
+          resultType: 'NEWS',
+          title: 'Adverse-media screen - no exposure found',
+          excerpt: `Screened "${s.fullName}" across Dilisense adverse-media categories (political, regulatory, terrorism, financial crime, organised crime, violent crime). No articles matched.`,
+          url: null,
+          publishedAt: null,
+          sourceName: 'Dilisense adverse media',
+          candidate: { name: s.fullName },
+          data: { totalHits: 0, hitsByCategory: byCategory, screenedAt: ctx.now.toISOString() },
+          category: 'MEDIA',
         });
+      }
+      return out;
     },
   };
 }

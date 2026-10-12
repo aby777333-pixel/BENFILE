@@ -12,7 +12,7 @@ import { eCourtsConnector, parseCases } from '@/lib/external/live/ecourts';
 import { attestrConnector, isoDate, parseAutocomplete } from '@/lib/external/live/attestr';
 import { extractPerSqft, fetchGuidelineValue } from '@/lib/integrations/landlens';
 import { openSanctionsConnector, parseMatches } from '@/lib/external/live/opensanctions';
-import { dilisenseConnector, parseRecords } from '@/lib/external/live/dilisense';
+import { dilisenseConnector, dilisenseDob, parseMediaExposures, parseRecords } from '@/lib/external/live/dilisense';
 import { PRICING, pricingFor } from '@/lib/integrations/pricing';
 
 const NOW = new Date('2026-10-12T00:00:00Z');
@@ -159,22 +159,37 @@ describe('Dilisense connector', () => {
     expect(r.records[1].pepType).toBe('MEMBER OF PARLIAMENT');
     expect(parseRecords({ results: [{ name: 'x' }] }).records[0].sourceType).toBe('OTHER');
   });
-  it('calls checkIndividual with the x-api-key header and groups by source type', async () => {
+  it('calls checkIndividual with the x-api-key header, dd/mm/yyyy dob, and groups by source type', async () => {
     const { fetchImpl, calls } = fakeFetch(() => ({ body: payload }));
-    const f = await dilisenseConnector({ apiKey: 'dk', fetchImpl }).searchSanctions!(subject, ctx);
+    const f = await dilisenseConnector({ apiKey: 'dk', fetchImpl }).searchSanctions!({ ...subject, dob: '1976-12-27' }, ctx);
     expect(calls[0].url).toContain('/v1/checkIndividual?names=');
+    expect(calls[0].url).toContain('dob=27%2F12%2F1976');
+    expect(calls[0].url).toContain('fuzzy_search=1');
     expect((calls[0].init.headers as Record<string, string>)['x-api-key']).toBe('dk');
     expect(f.find((x) => x.resultType === 'SANCTIONS_SCREEN')!.data.hits).toBe(1);
     expect(f.find((x) => x.resultType === 'PEP_SCREEN')!.data.hits).toBe(1);
+    expect(dilisenseDob('1976')).toBe('00/00/1976');
+    expect(dilisenseDob(null)).toBeUndefined();
   });
-  it('skips adverse media unless an endpoint is configured', async () => {
-    const { fetchImpl, calls } = fakeFetch(() => ({ body: { found_records: [{ title: 'Probe', url: 'https://m.example.com/a', date: '2026-01-01' }] } }));
+  it('parses adverse-media exposures grouped by category and skips media unless enabled', async () => {
+    const media = { timestamp: '2026-10-12T13:00:00Z', total_hits: 2, news_exposures: { financial_crime: { category: 'financial_crime', hits: 2, articles: [{ timestamp: '2026-01-01T00:00:00Z', language: 'en', headline: 'Probe names executive', source_link: 'https://m.example.com/a', body: '<p>An executive was named.</p><p>More.</p>' }] }, political: { category: 'political', hits: 0, articles: [] } } };
+    const p = parseMediaExposures(media);
+    expect(p.totalHits).toBe(2);
+    expect(p.byCategory.financial_crime).toBe(2);
+    expect(p.articles[0].snippet).toBe('An executive was named. More.');
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: media }));
     expect(await dilisenseConnector({ apiKey: 'dk', fetchImpl }).searchMedia!(subject, ctx)).toEqual([]);
     expect(calls).toHaveLength(0);
     const f = await dilisenseConnector({ apiKey: 'dk', fetchImpl, mediaEndpoint: '/media/checkIndividual' }).searchMedia!(subject, ctx);
     expect(f).toHaveLength(1);
     expect(f[0].resultType).toBe('NEWS');
+    expect(f[0].data.adverseMediaCategory).toBe('financial_crime');
     expect(calls[0].url).toContain('/v1/media/checkIndividual?names=');
+    expect(calls[0].url).toContain('fetch_articles=true');
+    const clean = fakeFetch(() => ({ body: { total_hits: 0, news_exposures: {} } }));
+    const c = await dilisenseConnector({ apiKey: 'dk', fetchImpl: clean.fetchImpl, mediaEndpoint: '/media/checkIndividual' }).searchMedia!(subject, ctx);
+    expect(c).toHaveLength(1);
+    expect(c[0].title).toMatch(/no exposure/);
   });
 });
 
