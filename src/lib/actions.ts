@@ -263,19 +263,27 @@ export async function runExternalIntelligence(form: FormData): Promise<ActionRes
 
     const { data: search, error: sErr } = await db.from('external_searches').insert({ client_id: clientId, consent_id: consent.id, purpose, connectors: result.connectorsRun, requested_by: staff.userId, completed_at: new Date().toISOString(), summary: { ...result.summary, skipped: result.connectorsSkipped } }).select('id').single();
     if (sErr) throw new Error(sErr.message);
+    // Re-runs: findings still PENDING are re-scored with the latest matching details; reviewed findings are never touched.
+    const { data: existingRows } = await db.from('external_findings').select('id,connector_key,record_id,review_status').eq('client_id', clientId);
+    const existing = new Map((existingRows ?? []).map((r) => [`${r.connector_key}:${r.record_id}`, r]));
     let added = 0;
+    let rescored = 0;
     for (const f of result.findings) {
-      const { error } = await db.from('external_findings').upsert(
-        { client_id: clientId, search_id: search.id, connector_key: f.connectorKey, result_type: f.resultType, title: f.title, excerpt: f.excerpt, url: f.url, source_name: `${f.sourceName}${f.mode === 'SANDBOX' ? '' : ''}`, source_class: f.sourceClass, tier: f.tier, record_id: f.recordId, published_at: f.publishedAt, retrieved_at: f.retrievedAt, match_score: f.match.score, match_status: f.match.status, match_reasons: { reasons: f.match.reasons, gaps: f.match.gaps }, category: f.category, severity: f.severity, entity_role: f.entityRole ?? null, data: { ...f.data, mode: f.mode, categoryLabel: f.categoryLabel, humanReviewRequired: f.humanReviewRequired, connectorName: f.connectorName } },
-        { onConflict: 'client_id,connector_key,record_id', ignoreDuplicates: true },
-      );
-      if (!error) added++;
+      const row = { client_id: clientId, search_id: search.id, connector_key: f.connectorKey, result_type: f.resultType, title: f.title, excerpt: f.excerpt, url: f.url, source_name: f.sourceName, source_class: f.sourceClass, tier: f.tier, record_id: f.recordId, published_at: f.publishedAt, retrieved_at: f.retrievedAt, match_score: f.match.score, match_status: f.match.status, match_reasons: { reasons: f.match.reasons, gaps: f.match.gaps }, category: f.category, severity: f.severity, entity_role: f.entityRole ?? null, data: { ...f.data, mode: f.mode, categoryLabel: f.categoryLabel, humanReviewRequired: f.humanReviewRequired, connectorName: f.connectorName } };
+      const prev = existing.get(`${f.connectorKey}:${f.recordId}`);
+      if (!prev) {
+        const { error } = await db.from('external_findings').insert(row);
+        if (!error) added++;
+      } else if (prev.review_status === 'PENDING') {
+        const { error } = await db.from('external_findings').update({ search_id: search.id, retrieved_at: f.retrievedAt, match_score: f.match.score, match_status: f.match.status, match_reasons: row.match_reasons, severity: f.severity, category: f.category, data: row.data }).eq('id', prev.id);
+        if (!error) rescored++;
+      }
     }
     await db.from('refresh_schedules').upsert({ client_id: clientId, last_checked_at: new Date().toISOString(), next_permitted_at: new Date(Date.now() + 90 * 86_400_000).toISOString(), sources_checked: result.connectorsRun, authorized_until: consent.expires_at, consent_id: consent.id, updated_at: new Date().toISOString() });
-    await audit(db, { action: 'external.search', clientId, entityTable: 'external_searches', entityId: search.id, details: { purpose, connectors: result.connectorsRun, findings: result.findings.length, skipped: result.connectorsSkipped } });
+    await audit(db, { action: 'external.search', clientId, entityTable: 'external_searches', entityId: search.id, details: { purpose, connectors: result.connectorsRun, findings: result.findings.length, added, rescored, skipped: result.connectorsSkipped, matchingDetails: { employer: !!formDetails.employer, occupation: !!formDetails.occupation, city: !!formDetails.city, dob: !!formDetails.dob, profiles: formDetails.profiles.length }, subjectFromRun: !!client.latest_run_id } });
     await db.from('intelligence_events').insert({ client_id: clientId, event_type: 'EXTERNAL_SEARCH', title: `External intelligence search run (${result.findings.length} findings)`, detail: `Connectors: ${result.connectorsRun.join(', ')}${result.connectorsSkipped.length ? `; skipped: ${result.connectorsSkipped.map((s) => s.key).join(', ')}` : ''}`, source_key: 'EXTERNAL', actor_id: staff.userId });
     revalidate(clientId);
-    return `${result.findings.length} findings retrieved (${added} new). ${result.summary.reviewRequired} require human review.`;
+    return `${result.findings.length} findings retrieved (${added} new, ${rescored} re-scored with the latest matching details). ${result.summary.reviewRequired} require human review.`;
   });
 }
 
