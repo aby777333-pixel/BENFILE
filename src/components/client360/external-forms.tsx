@@ -3,12 +3,25 @@ import { reviewFinding, runExternalIntelligence } from '@/lib/actions';
 import { ActionForm } from '@/components/ui/action-form';
 import { ModeBadge } from '@/components/ui/badges';
 
-export function ExternalSearchForm({ clientId, connectors }: { clientId: string; connectors: Array<{ key: string; name: string; mode: string; tier: number; requires: string[]; authorised: boolean }> }) {
+export function ExternalSearchForm({ clientId, connectors, hasRun, prefill }: { clientId: string; connectors: Array<{ key: string; name: string; mode: string; tier: number; requires: string[]; authorised: boolean }>; hasRun?: boolean; prefill?: { employer?: string | null; occupation?: string | null; city?: string | null; dob?: string | null; profiles?: string[] } }) {
   return (
     <ActionForm action={runExternalIntelligence} resetOnSuccess={false}>
       <input type="hidden" name="clientId" value={clientId} />
       <label className="label">Lawful purpose for this search</label>
-      <input name="purpose" className="input mb-3" defaultValue="KYC / client due diligence" required minLength={3} />
+      <input name="purpose" className="input mb-3" defaultValue={hasRun ? 'KYC / client due diligence' : 'Preliminary screening before initial consultation (Part A consent)'} required minLength={3} />
+      <details className="mb-3 rounded border border-white/[0.08] p-2" open={!hasRun}>
+        <summary className="cursor-pointer text-xs font-semibold text-ink-200">
+          Matching details {hasRun ? '(optional - adds to the verified profile)' : '(prospect - no verification run yet)'}
+        </summary>
+        <p className="mb-2 mt-1 text-[11px] text-ink-500">Used only to separate this person from others with the same name. Pre-filled from what they gave when accepting consent. Never enter PAN, Aadhaar, phone or e-mail here - those enter through verification ingest with hashing.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input name="employer" className="input" placeholder="Current employer / business" defaultValue={prefill?.employer ?? ''} />
+          <input name="occupation" className="input" placeholder="Occupation" defaultValue={prefill?.occupation ?? ''} />
+          <input name="city" className="input" placeholder="City" defaultValue={prefill?.city ?? ''} />
+          <input name="dob" type="date" className="input" defaultValue={prefill?.dob ?? ''} />
+        </div>
+        <textarea name="profiles" className="input mt-2 min-h-14" placeholder="Nominated public profile URLs, one per line" defaultValue={(prefill?.profiles ?? []).join('\n')} />
+      </details>
       <div className="grid gap-1.5 sm:grid-cols-2">
         {connectors.map((c) => (
           <label key={c.key} className={`flex items-center gap-2 rounded border px-2 py-1.5 text-xs ${c.authorised ? 'border-white/10' : 'border-white/[0.05] opacity-60'}`}>

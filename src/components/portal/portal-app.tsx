@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { browserSupabase } from '@/lib/db/browser';
+import { portalSupabase } from '@/lib/db/browser';
 import { Logo } from '@/components/ui/logo';
 import { CONSENT_STAGES, CONSENT_TERMS_VERSION, stageStatuses, type ConsentStage } from '@/lib/portal/consent-stages';
 
@@ -144,7 +144,7 @@ function SubmitForm({ token, kind, onDone, children, label = 'Send to my relatio
     const form = e.currentTarget;
     setBusy(true);
     setMsg(null);
-    const { error } = await browserSupabase().rpc('portal_submit', { p_token: token, p_kind: kind, p_payload: payloadFrom(new FormData(form)) });
+    const { error } = await portalSupabase().rpc('portal_submit', { p_token: token, p_kind: kind, p_payload: payloadFrom(new FormData(form)) });
     if (error) {
       setMsg({ ok: false, text: friendly(error.message) });
       setBusy(false);
@@ -194,7 +194,8 @@ function ConsentStageForm({ token, stage, onDone }: { token: string; stage: Cons
     }
     setBusy(true);
     setMsg(null);
-    const { error } = await browserSupabase().rpc('portal_consent', { p_token: token, p_stage: stage, p_sources: sources, p_full_name: fullName, p_user_agent: navigator.userAgent, p_terms_version: CONSENT_TERMS_VERSION });
+    const details = stage === 'PRELIMINARY' ? { employer: String(fd.get('employer') ?? '').trim(), occupation: String(fd.get('occupation') ?? '').trim(), city: String(fd.get('city') ?? '').trim(), dob: String(fd.get('dob') ?? '').trim(), profiles: String(fd.get('profiles') ?? '').trim() } : {};
+    const { error } = await portalSupabase().rpc('portal_consent', { p_token: token, p_stage: stage, p_sources: sources, p_full_name: fullName, p_user_agent: navigator.userAgent, p_terms_version: CONSENT_TERMS_VERSION, p_details: details });
     if (error) {
       setMsg({ ok: false, text: /full name|tick at least/i.test(error.message) ? error.message : friendly(error.message) });
       setBusy(false);
@@ -232,6 +233,22 @@ function ConsentStageForm({ token, stage, onDone }: { token: string; stage: Cons
           Valid for {def.validityDays} days. You can withdraw at any time from this page. Every finding is reviewed by a named analyst; a name match alone is never treated as a fact about you. Terms version {CONSENT_TERMS_VERSION}.
         </p>
       </div>
+      {stage === 'PRELIMINARY' && (
+        <div className="rounded-md border border-white/[0.06] bg-ink-900 p-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-300">Details to avoid mistaken matches (optional)</div>
+          <p className="mb-2 text-xs text-ink-400">People share names. These details are used only to exclude records that are not about you. Your PAN, phone and e-mail are not collected here; they are verified later through a one-time code or a provider check you complete yourself.</p>
+          <Row>
+            <Input name="employer" label="Current employer or business" placeholder="e.g. Zoho Corporation" />
+            <Input name="occupation" label="Occupation" placeholder="e.g. Software architect" />
+            <Input name="city" label="City of residence" placeholder="e.g. Chennai" />
+            <Input name="dob" label="Date of birth" type="date" />
+          </Row>
+          <Field label="Public profiles you nominate (LinkedIn, Instagram, website) - one per line">
+            <textarea name="profiles" className="input min-h-16" placeholder={'linkedin.com/in/your-name\ninstagram.com/your.handle'} />
+          </Field>
+          <p className="mt-1 text-[11px] text-ink-500">Only profiles you list here are looked at, as public pages without logging in. Leave blank to exclude social and professional profiles entirely.</p>
+        </div>
+      )}
       <Field label="Your full name (as on PAN) - this is your signature">
         <input name="full_name" className="input" required minLength={3} autoComplete="name" />
       </Field>
@@ -262,7 +279,7 @@ function UploadForm({ token, clientId, onDone }: { token: string; clientId: stri
     setBusy(true);
     setMsg(null);
     try {
-      const sb = browserSupabase();
+      const sb = portalSupabase();
       const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(-80);
       const path = `portal/${clientId}/${token}/${Date.now()}-${safeName}`;
       const sha = await sha256Hex(file);
@@ -303,7 +320,7 @@ export function PortalApp({ token }: { token: string }) {
   const [consentMsg, setConsentMsg] = useState<Msg | null>(null);
 
   const load = useCallback(async () => {
-    const { data, error } = await browserSupabase().rpc('portal_context', { p_token: token });
+    const { data, error } = await portalSupabase().rpc('portal_context', { p_token: token });
     if (error) {
       setState('error');
       return;
@@ -323,7 +340,7 @@ export function PortalApp({ token }: { token: string }) {
   async function withdrawConsent() {
     if (!window.confirm('Withdraw your consent? We will stop processing your information for the stated purposes and your relationship manager will be notified. You can grant consent again later.')) return;
     setConsentMsg(null);
-    const { error } = await browserSupabase().rpc('portal_submit', { p_token: token, p_kind: 'CONSENT_WITHDRAWAL', p_payload: { reason: 'Withdrawn by client via portal', withdrawn_at: new Date().toISOString() } });
+    const { error } = await portalSupabase().rpc('portal_submit', { p_token: token, p_kind: 'CONSENT_WITHDRAWAL', p_payload: { reason: 'Withdrawn by client via portal', withdrawn_at: new Date().toISOString() } });
     if (error) {
       setConsentMsg({ ok: false, text: friendly(error.message) });
       return;

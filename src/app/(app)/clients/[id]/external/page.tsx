@@ -1,6 +1,7 @@
 import { loadClient } from '@/lib/db/load-client';
 import { hasPermission } from '@/lib/security/permissions';
 import { listConnectors } from '@/lib/external/orchestrator';
+import { detailsFromConsents } from '@/lib/external/prospect-subject';
 import { RESULT_TYPE_LABEL, type ResultType } from '@/lib/external/types';
 import { formatDate, formatDateTime } from '@/lib/engines/normalize';
 import { TIER_LABEL, type SourceTier } from '@/lib/canonical/types';
@@ -52,7 +53,7 @@ export default async function ExternalPage({ params, searchParams }: { params: P
           ) : (
             <p className="mb-3 text-xs text-amber-300">Record consent (Notes & Cases tab) before searching. BENFILE is not a covert people-search tool.</p>
           )}
-          {canSearch && consent ? <ExternalSearchForm clientId={id} connectors={connectors.map((c) => ({ key: c.key, name: c.name, mode: c.mode, tier: c.tier, requires: c.requiresConsentFor, authorised: c.requiresConsentFor.every((s) => consent.sources_authorized.includes(s) || consent.sources_authorized.includes('ALL')) }))} /> : null}
+          {canSearch && consent ? <ExternalSearchForm clientId={id} hasRun={!!c360.run} prefill={detailsFromConsents(c360.consents)} connectors={connectors.map((c) => ({ key: c.key, name: c.name, mode: c.mode, tier: c.tier, requires: c.requiresConsentFor, authorised: c.requiresConsentFor.every((s) => consent.sources_authorized.includes(s) || consent.sources_authorized.includes('ALL')) }))} /> : null}
         </Panel>
         <Panel title="Continuous refresh">
           {refresh ? (

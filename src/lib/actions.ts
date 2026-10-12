@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { audit } from '@/lib/db/audit';
 import { getStaff } from '@/lib/db/server';
 import { buildSubject, runExternalSearch } from '@/lib/external/orchestrator';
+import { detailsFromConsents, mergeSubjectDetails, parseProfileUrls, subjectFromProspect } from '@/lib/external/prospect-subject';
 import { compareTimeline, type TimelineEntry } from '@/lib/external/timeline';
 import { hasPermission, type Permission } from '@/lib/security/permissions';
 import type { CanonicalProfile } from '@/lib/canonical/types';
@@ -21,6 +22,7 @@ async function guard(perm: Permission) {
   return { db, staff };
 }
 const uuid = z.string().uuid();
+const optText = (v: FormDataEntryValue | null) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 160) : null);
 const revalidate = (clientId: string) => {
   revalidatePath(`/clients/${clientId}`, 'layout');
   revalidatePath('/dashboard');
@@ -240,14 +242,23 @@ export async function runExternalIntelligence(form: FormData): Promise<ActionRes
     const purpose = z.string().min(3).max(300).parse(form.get('purpose'));
     const connectorKeys = form.getAll('connectors').map(String);
     const { db, staff } = await guard('external:search');
-    const { data: client } = await db.from('clients').select('latest_run_id,display_name').eq('id', clientId).single();
-    if (!client?.latest_run_id) throw new Error('Run a verification before external intelligence.');
-    const { data: consent } = await db.from('consents').select('id,sources_authorized,expires_at,status').eq('client_id', clientId).eq('status', 'GRANTED').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: client } = await db.from('clients').select('latest_run_id,display_name,city,occupation').eq('id', clientId).single();
+    if (!client) throw new Error('Client not found.');
+    const { data: consent } = await db.from('consents').select('id,sources_authorized,expires_at,status,acceptance').eq('client_id', clientId).eq('status', 'GRANTED').order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (!consent) throw new Error('No granted consent on file. Record consent and lawful purpose first.');
     if (consent.expires_at && new Date(consent.expires_at) < new Date()) throw new Error('Consent has expired; re-capture before searching.');
-    const { data: run } = await db.from('verification_runs').select('canonical').eq('id', client.latest_run_id).single();
-    const [{ data: emails }, { data: phones }] = await Promise.all([db.from('emails').select('email_hash').eq('run_id', client.latest_run_id), db.from('phone_numbers').select('number_hash').eq('run_id', client.latest_run_id)]);
-    const subject = buildSubject(run!.canonical as CanonicalProfile, { emailHashes: (emails ?? []).map((e) => e.email_hash), phoneHashes: (phones ?? []).map((p) => p.number_hash) });
+    // Analyst-entered matching details (never identifiers): narrow common-name matches.
+    const formDetails = { employer: optText(form.get('employer')), occupation: optText(form.get('occupation')), city: optText(form.get('city')), dob: optText(form.get('dob')), profiles: parseProfileUrls(form.get('profiles')) };
+    let subject;
+    if (client.latest_run_id) {
+      const { data: run } = await db.from('verification_runs').select('canonical').eq('id', client.latest_run_id).single();
+      const [{ data: emails }, { data: phones }] = await Promise.all([db.from('emails').select('email_hash').eq('run_id', client.latest_run_id), db.from('phone_numbers').select('number_hash').eq('run_id', client.latest_run_id)]);
+      subject = mergeSubjectDetails(buildSubject(run!.canonical as CanonicalProfile, { emailHashes: (emails ?? []).map((e) => e.email_hash), phoneHashes: (phones ?? []).map((p) => p.number_hash) }), formDetails);
+    } else {
+      // Prospect with Part A consent and no verification run: name + city + the details the person gave when accepting.
+      subject = subjectFromProspect(client, detailsFromConsents([{ status: consent.status, acceptance: consent.acceptance as Record<string, unknown> | null }]), formDetails);
+      if (!subject.fullName) throw new Error('The prospect has no name on record.');
+    }
     const result = await runExternalSearch(subject, { purpose, consentSources: consent.sources_authorized as string[], connectorKeys });
 
     const { data: search, error: sErr } = await db.from('external_searches').insert({ client_id: clientId, consent_id: consent.id, purpose, connectors: result.connectorsRun, requested_by: staff.userId, completed_at: new Date().toISOString(), summary: { ...result.summary, skipped: result.connectorsSkipped } }).select('id').single();
