@@ -15,7 +15,10 @@ export function ActionForm({ action, children, className, confirm, onDone, reset
         e.preventDefault();
         if (confirm && !window.confirm(confirm)) return;
         const form = e.currentTarget;
+        // Include the clicked submit button (name/value) - forms with several decision buttons rely on it.
+        const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
         const fd = new FormData(form);
+        if (submitter?.name && !fd.has(submitter.name)) fd.append(submitter.name, submitter.value);
         start(async () => {
           const r = await action(fd);
           setMsg({ ok: r.ok, text: r.ok ? (r.message ?? 'Saved') : r.error });
