@@ -508,6 +508,9 @@ export async function reviewPortalSubmission(form: FormData): Promise<ActionResu
       if (s.kind === 'CONTACT_PREFERENCES') await db.from('contact_controls').upsert({ client_id: s.client_id, preferred_channel: (p.channel as string) ?? null, preferred_language: (p.language as string) ?? 'en', preferred_format: (p.format as string) ?? null, marketing_permission: p.marketing === true || p.marketing === 'on', updated_at: new Date().toISOString() }, { onConflict: 'client_id' });
       if (s.kind === 'CORRECTION') await db.from('disputes').insert({ client_id: s.client_id, entity_table: String(p.entity ?? 'personal_details'), field_key: (p.field as string) ?? null, flag: 'DISPUTED', reason: `Client correction via portal: ${String(p.detail ?? '')}`, raised_by: staff.userId });
     }
+    // Self-declared details (0008): acceptance only records the reviewer - the items stay CLIENT DECLARED;
+    // rejection retires every declaration made in that submission.
+    if (s.kind === 'DETAILS') await db.from('client_declarations').update({ status: decision === 'REJECTED' ? 'REJECTED' : 'DECLARED', reviewed_by: staff.userId, reviewed_at: new Date().toISOString() }).eq('submission_id', id).neq('status', 'SUPERSEDED');
     await audit(db, { action: 'portal.submission_review', clientId: s.client_id, entityTable: 'portal_submissions', entityId: id, details: { kind: s.kind, decision } });
     revalidate(s.client_id);
   });

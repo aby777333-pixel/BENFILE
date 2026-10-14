@@ -7,13 +7,55 @@ import { EvidenceDrawer } from '@/components/ui/evidence';
 import { MaskedValue } from '@/components/ui/masked';
 import { DisputeButton } from '@/components/client360/dispute-button';
 import { ContactEditForm } from '@/components/client360/contact-edit-form';
+import { declarationLabel } from '@/lib/portal/declared-details';
+
+type DeclarationRow = { id: string; kind: string; label: string; value_display: string; sensitive_value_id: string | null; detail: Record<string, unknown>; status: string; declared_at: string };
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { c360, role } = await loadClient(id, 'contact');
+  const { c360, role, db } = await loadClient(id, 'contact');
   const { run, sensitive, client } = c360;
   const canReveal = hasPermission(role, 'sensitive:reveal');
   const canWrite = hasPermission(role, 'clients:write');
+  const { data: declRows } = await db.from('client_declarations').select('id,kind,label,value_display,sensitive_value_id,detail,status,declared_at').eq('client_id', id).neq('status', 'SUPERSEDED').order('declared_at', { ascending: false });
+  const declarations = (declRows ?? []) as DeclarationRow[];
+  const selfDeclared = (
+    <Panel title="Details declared by the client on the portal" right={<Badge tone="declared">Client declared</Badge>}>
+      {declarations.length ? (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Detail</th>
+              <th>Value</th>
+              <th>Given</th>
+              <th>State</th>
+            </tr>
+          </thead>
+          <tbody>
+            {declarations.map((d) => (
+              <tr key={d.id}>
+                <td className="text-xs">{declarationLabel(d.kind, d.label)}</td>
+                <td>
+                  {d.sensitive_value_id || ['PAN', 'AADHAAR', 'PASSPORT', 'VOTER_ID', 'DRIVING_LICENCE', 'PHONE', 'EMAIL'].includes(d.kind) ? (
+                    <MaskedValue masked={d.value_display} sensitiveId={d.sensitive_value_id} canReveal={canReveal} />
+                  ) : (
+                    <span className="text-sm">{d.value_display}</span>
+                  )}
+                  {d.kind === 'PASSPORT' && typeof d.detail?.expiry === 'string' ? <span className="ml-2 text-[11px] text-ink-400">expires {formatDate(d.detail.expiry)}</span> : null}
+                  {d.kind === 'AADHAAR' ? <span className="ml-2 text-[11px] text-ink-500">last four digits only</span> : null}
+                </td>
+                <td className="text-xs">{formatDate(d.declared_at)}</td>
+                <td>{d.status === 'REJECTED' ? <Badge tone="bad">Rejected</Badge> : <Badge tone="declared">Declared</Badge>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="text-sm text-ink-400">The client has not declared any details on the portal yet (the My details section is optional).</p>
+      )}
+      <p className="mt-2 text-[11px] text-ink-500">Typed by the client under their consent. Masked and hashed on the record, full value sealed (Aadhaar never stored in full). Not verified until a document or provider check confirms it; review the submission on the Documents tab.</p>
+    </Panel>
+  );
   const declared = (
     <Panel title="Contact given at prospect creation" right={<Badge tone="declared">Client declared</Badge>}>
       {client.contact_phone_masked || client.contact_email_masked ? (
@@ -34,6 +76,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     return (
       <div className="space-y-4">
         {declared}
+        {selfDeclared}
         <Empty>No verification run yet.</Empty>
       </div>
     );
@@ -45,6 +88,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="space-y-4 xl:col-span-2">
         {client.contact_phone_masked || client.contact_email_masked || canWrite ? declared : null}
+        {selfDeclared}
         <Panel title="Phone numbers" right={<span className="text-[11px] text-ink-400">Each number shows the source it is linked to</span>}>
           {sensitive.phones.length ? (
             <table className="table">

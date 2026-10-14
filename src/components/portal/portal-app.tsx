@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { portalSupabase } from '@/lib/db/browser';
 import { Logo } from '@/components/ui/logo';
 import { CONSENT_STAGES, CONSENT_TERMS_VERSION, stageStatuses, type ConsentStage } from '@/lib/portal/consent-stages';
+import { ADDRESS_FIELDS, buildDeclarationPayload, CONTACT_FIELDS, declarationLabel, IDENTITY_FIELDS } from '@/lib/portal/declared-details';
 
+type Declaration = { id: string; kind: string; label: string; value: string; status: string; declaredAt: string };
 type DocRequest = { id: string; documentType: string; reason: string | null; status: string; requestedAt: string };
 type PortalDoc = { id: string; docType: string; title: string; status: string; uploadedAt: string };
 type Submission = { id: string; kind: string; status: string; createdAt: string };
@@ -17,6 +19,7 @@ type PortalContext = {
   documents: PortalDoc[];
   submissions: Submission[];
   consents: Consent[];
+  declarations?: Declaration[];
 };
 type Msg = { ok: boolean; text: string };
 type Option = string | [string, string];
@@ -314,6 +317,115 @@ function UploadForm({ token, clientId, onDone }: { token: string; clientId: stri
   );
 }
 
+/**
+ * Optional self-declared details (name, date of birth, PAN, Aadhaar, passport, voter ID, driving
+ * licence, mobiles, e-mails, addresses). Checked on the device for format, then stored by the
+ * server masked + hashed with the full value sealed (Aadhaar: last four digits only). Only shown
+ * once a consent stage is in force; the server enforces the same rule.
+ */
+function DeclareDetailsForm({ token, declarations, onDone }: { token: string; declarations: Declaration[]; onDone: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Msg | null>(null);
+  const [sameAddress, setSameAddress] = useState(true);
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const input: Record<string, string> = {};
+    for (const [k, v] of new FormData(form).entries()) if (typeof v === 'string') input[k] = v;
+    const built = buildDeclarationPayload(input);
+    if (!built.ok) {
+      setMsg({ ok: false, text: built.error });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    const { data, error } = await portalSupabase().rpc('portal_declare_details', { p_token: token, p_payload: built.payload, p_user_agent: navigator.userAgent });
+    if (error) {
+      setMsg({ ok: false, text: /^Please /.test(error.message) ? error.message : friendly(error.message) });
+      setBusy(false);
+      return;
+    }
+    const res = (data ?? {}) as { declared?: string[]; unchanged?: string[] };
+    const n = res.declared?.length ?? 0;
+    const u = res.unchanged?.length ?? 0;
+    form.reset();
+    setSameAddress(true);
+    setMsg({ ok: true, text: n ? `Thank you - ${n} detail${n === 1 ? '' : 's'} recorded${u ? ` (${u} already on file)` : ''}. Our team will review.` : 'Those details were already on file - nothing changed.' });
+    await onDone();
+    setBusy(false);
+  }
+  const addressInputs = (prefix: 'address' | 'permanent') => (
+    <Row>
+      {ADDRESS_FIELDS.map((a) => (
+        <Input key={`${prefix}_${a.suffix}`} name={`${prefix}_${a.suffix}`} label={a.label} placeholder={a.placeholder} />
+      ))}
+    </Row>
+  );
+  return (
+    <div className="space-y-4">
+      <p className="text-ink-200">Every field here is optional. Share only what you are comfortable with - you can add the rest later or leave it for your relationship manager to collect from your documents.</p>
+      <div className="rounded-md border border-white/[0.06] bg-ink-900 p-3 text-xs text-ink-300">
+        <div className="mb-1 font-semibold text-ink-200">How these details are kept</div>
+        <ul className="list-disc space-y-0.5 pl-4">
+          <li>Identity numbers and contact details are stored masked (for example ABCD*****E, 98XXXXX345). The full value is sealed and can be opened only by authorised staff, with a logged reason.</li>
+          <li>For Aadhaar we keep only the last four digits - never the full number.</li>
+          <li>Everything you type is marked &quot;declared by client&quot; until a document or an ownership check (such as a one-time code) confirms it. Nothing here is searched or shared on its own.</li>
+        </ul>
+      </div>
+      {declarations.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-300">On file (as you gave it)</h3>
+          <ul className="space-y-1.5">
+            {declarations.map((d) => (
+              <li key={d.id} className="flex items-start justify-between gap-3 rounded-md border border-white/[0.06] bg-ink-900 px-3 py-2">
+                <span className="text-ink-300">{declarationLabel(d.kind, d.label)}</span>
+                <span className="mono text-right text-ink-100">{d.value}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[11px] text-ink-500">Typing a different value below replaces the one on file; the earlier value stays in our records as superseded.</p>
+        </div>
+      )}
+      <form onSubmit={onSubmit} className="space-y-4" autoComplete="off">
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-300">Identity</h3>
+          <Row>
+            {IDENTITY_FIELDS.map((f) => (
+              <div key={f.key}>
+                <Input name={f.key} label={f.label} type={f.type ?? 'text'} placeholder={f.placeholder} />
+                {f.hint && <p className="mt-0.5 text-[11px] text-ink-500">{f.hint}</p>}
+              </div>
+            ))}
+          </Row>
+        </div>
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-300">Contact</h3>
+          <Row>
+            {CONTACT_FIELDS.map((f) => (
+              <Input key={f.key} name={f.key} label={f.label} type={f.type ?? 'text'} placeholder={f.placeholder} />
+            ))}
+          </Row>
+        </div>
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-300">Current address</h3>
+          {addressInputs('address')}
+        </div>
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-300">Permanent address</h3>
+          <label className="mb-2 flex items-center gap-2 text-sm text-ink-200">
+            <input type="checkbox" name="permanent_same" value="yes" className="accent-gold-500" checked={sameAddress} onChange={(e) => setSameAddress(e.target.checked)} /> Same as my current address
+          </label>
+          {!sameAddress && addressInputs('permanent')}
+        </div>
+        <Notice msg={msg} />
+        <button className="btn btn-primary" disabled={busy}>
+          {busy ? 'Saving...' : 'Save my details'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function PortalApp({ token }: { token: string }) {
   const [ctx, setCtx] = useState<PortalContext | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'invalid' | 'error'>('loading');
@@ -467,6 +579,14 @@ export function PortalApp({ token }: { token: string }) {
             </ul>
           </div>
         </div>
+      </Section>
+
+      <Section title="My details" hint={ctx.consentStatus === 'GRANTED' ? `Optional - ${(ctx.declarations ?? []).length ? `${(ctx.declarations ?? []).length} on file` : 'share what you are comfortable with'}` : 'Available once Part A consent is recorded'}>
+        {ctx.consentStatus === 'GRANTED' ? (
+          <DeclareDetailsForm token={token} declarations={ctx.declarations ?? []} onDone={load} />
+        ) : (
+          <p className="text-ink-300">Once you have accepted Part A above you can share your PAN, Aadhaar (last four digits are kept), passport, mobile, e-mail and address here. Every field is optional.</p>
+        )}
       </Section>
 
       <Section title="Correct my details" hint="Tell us if something we hold is wrong or out of date">

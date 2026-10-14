@@ -37,6 +37,13 @@ This is where a **provider's JSON result** lands - the structured response a KYC
 ## 6. Contact details
 **Contact** tab → **Add contact / Edit contact**. Stored masked (`98XXXXX345`, `ab***@example.com`) and hashed, full value sealed and revealed only with a logged reason. Marked *client declared* until an ownership check (one-time code / provider) confirms it.
 
+## 6a. Details the client types themselves (portal → My details)
+- Once Part A (or B) is in force, the portal shows **My details**: name as on PAN, date of birth, PAN, Aadhaar, passport (+ expiry), voter ID, driving licence, mobile / alternate mobile, e-mail / alternate e-mail, current and permanent address. **Every field is optional.**
+- Stored like everything else: masked + hashed on the record, full value sealed (reveal with a logged reason). **Aadhaar: last four digits and a hash only - the full number is never stored.** Format is checked on the device and again on the server; a wrong PAN / mobile / PIN is refused with a plain message.
+- Where you see it: **Contact** tab → *Details declared by the client on the portal* (masked, reveal where allowed); the submission itself on **Documents → Portal submissions** as *DETAILS* (masked values only). The primary mobile / e-mail also fills the declared contact if it was empty.
+- Review: **Accept** keeps the items as *client declared* (they never become verified by acceptance); **Reject** retires every item from that submission. A later different value supersedes the earlier one automatically; the same value again changes nothing.
+- These values are never searched on their own - they only help confirm or exclude matches once a document or provider check runs under consent.
+
 ## 7. Withdrawal, expiry, refresh
 - The person can withdraw on the portal at any time; searches stop immediately.
 - Part A expires after 30 days, Part B after 365; the External Intel tab refuses to run past expiry.
