@@ -42,7 +42,6 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     <span className="text-sm">{d.value_display}</span>
                   )}
                   {d.kind === 'PASSPORT' && typeof d.detail?.expiry === 'string' ? <span className="ml-2 text-[11px] text-ink-400">expires {formatDate(d.detail.expiry)}</span> : null}
-                  {d.kind === 'AADHAAR' ? <span className="ml-2 text-[11px] text-ink-500">last four digits only</span> : null}
                 </td>
                 <td className="text-xs">{formatDate(d.declared_at)}</td>
                 <td>{d.status === 'REJECTED' ? <Badge tone="bad">Rejected</Badge> : <Badge tone="declared">Declared</Badge>}</td>
@@ -53,7 +52,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       ) : (
         <p className="text-sm text-ink-400">The client has not declared any details on the portal yet (the My details section is optional).</p>
       )}
-      <p className="mt-2 text-[11px] text-ink-500">Typed by the client under their consent. Masked and hashed on the record, full value sealed (Aadhaar never stored in full). Not verified until a document or provider check confirms it; review the submission on the Documents tab.</p>
+      <p className="mt-2 text-[11px] text-ink-500">Typed by the client under their consent. Masked and hashed on the record, full value sealed - reveal with a logged reason. Not verified until a document or provider check confirms it; review the submission on the Documents tab.</p>
     </Panel>
   );
   const declared = (

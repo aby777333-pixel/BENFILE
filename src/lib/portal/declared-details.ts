@@ -22,7 +22,7 @@ export const IDENTITY_FIELDS: DeclaredField[] = [
   { key: 'full_name', kind: 'NAME', label: 'Full name (as on PAN)', placeholder: 'e.g. Abraham George' },
   { key: 'dob', kind: 'DOB', label: 'Date of birth', type: 'date' },
   { key: 'pan', kind: 'PAN', label: 'PAN', placeholder: 'ABCDE1234F' },
-  { key: 'aadhaar', kind: 'AADHAAR', label: 'Aadhaar number', placeholder: '12 digits', hint: 'We keep only the last four digits.' },
+  { key: 'aadhaar', kind: 'AADHAAR', label: 'Aadhaar number', placeholder: '12 digits', hint: 'Shown masked; the full number is sealed.' },
   { key: 'passport', kind: 'PASSPORT', label: 'Passport number', placeholder: 'A1234567' },
   { key: 'passport_expiry', kind: 'PASSPORT', label: 'Passport expiry', type: 'date' },
   { key: 'voter_id', kind: 'VOTER_ID', label: 'Voter ID (EPIC)', placeholder: 'ABC1234567' },

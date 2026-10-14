@@ -6,7 +6,7 @@ Client financial intelligence platform (India). Next.js 15 + Supabase (project `
 - `npm run typecheck && npm test && npm run build` before every commit. Tests use fake fetch only - never the network.
 - Commit as `-c user.name="Aby (BENFILE)" -c user.email="aby777333@gmail.com"` (no global git identity on this machine).
 - Netlify is **not** git-linked. Deploy with `netlify deploy --build --prod --message "..."` from the project folder.
-- Schema changes: write `supabase/migrations/000N_*.sql` **and** apply the same SQL with the Supabase MCP `apply_migration`. Applied so far: 0001-0008.
+- Schema changes: write `supabase/migrations/000N_*.sql` **and** apply the same SQL with the Supabase MCP `apply_migration`. Applied so far: 0001-0009.
 - The desktop app copies any `@file` PDF into `public/`; remove it before committing (public/ is served).
 - After a deploy, a browser that still has the old build shows "Application error: a client-side exception"; a reload fixes it.
 
@@ -16,7 +16,7 @@ Client financial intelligence platform (India). Next.js 15 + Supabase (project `
 - **Portal links are handed over by a person.** The prospect form offers WhatsApp / mailto drafts on the RM's own device; BENFILE never sends the link itself. The owner explicitly declined adding OTP or other authentication to the link.
 - **Identifiers never go into search forms.** PAN, Aadhaar, phone, e-mail enter only through verification ingest (hashed + masked, full value sealed in `sensitive_values`). Matching details on the External tab are employer, occupation, cities (comma-separated, union), DOB, nominated profile URLs.
 - **Declared contact** (mobile/e-mail typed by the RM at prospect creation or via Contact tab → Add/Edit contact) is masked + hashed on `clients`, full value sealed when the role has `verification:ingest`, labelled "client declared" until an ownership check confirms it.
-- **Self-declared details on the portal** (0008, RPC `portal_declare_details`, table `client_declarations`, `src/lib/portal/declared-details.ts`): the person may type name, DOB, PAN, Aadhaar, passport, voter ID, DL, mobiles, e-mails, addresses - all optional, only after Part A/B consent. Same masking + hashing as ingest (`bf_*` SQL helpers mirror `masking.ts`), full value sealed in `sensitive_values`; **Aadhaar is never stored in full**. Items stay CLIENT DECLARED; accept = reviewer noted, reject = retired, new value = earlier SUPERSEDED. Shown on Contact tab + Documents → Portal submissions (masked only).
+- **Self-declared details on the portal** (0008, RPC `portal_declare_details`, table `client_declarations`, `src/lib/portal/declared-details.ts`): the person may type name, DOB, PAN, Aadhaar, passport, voter ID, DL, mobiles, e-mails, addresses - all optional, only after Part A/B consent. Same masking + hashing as ingest (`bf_*` SQL helpers mirror `masking.ts`), full value sealed in `sensitive_values` - **including Aadhaar** (owner decision 2026-10-14, migration 0009; consent terms version bumped to 2026-10-14 so Part A no longer promises "no storage of your Aadhaar number"). Items stay CLIENT DECLARED; accept = reviewer noted, reject = retired, new value = earlier SUPERSEDED. Shown on Contact tab + Documents → Portal submissions (masked only).
 - **External search re-runs re-score PENDING findings** with the latest matching details; reviewed findings are never touched.
 - `ActionForm` includes the clicked submit button's name/value (multi-button decision forms depend on it).
 

@@ -320,7 +320,7 @@ function UploadForm({ token, clientId, onDone }: { token: string; clientId: stri
 /**
  * Optional self-declared details (name, date of birth, PAN, Aadhaar, passport, voter ID, driving
  * licence, mobiles, e-mails, addresses). Checked on the device for format, then stored by the
- * server masked + hashed with the full value sealed (Aadhaar: last four digits only). Only shown
+ * server masked + hashed with the full value sealed (Aadhaar included, owner decision 2026-10-14). Only shown
  * once a consent stage is in force; the server enforces the same rule.
  */
 function DeclareDetailsForm({ token, declarations, onDone }: { token: string; declarations: Declaration[]; onDone: () => Promise<void> }) {
@@ -368,7 +368,7 @@ function DeclareDetailsForm({ token, declarations, onDone }: { token: string; de
         <div className="mb-1 font-semibold text-ink-200">How these details are kept</div>
         <ul className="list-disc space-y-0.5 pl-4">
           <li>Identity numbers and contact details are stored masked (for example ABCD*****E, 98XXXXX345). The full value is sealed and can be opened only by authorised staff, with a logged reason.</li>
-          <li>For Aadhaar we keep only the last four digits - never the full number.</li>
+          <li>Aadhaar is never used for authentication or lookup here. If you give it, it is kept the same way - masked on the record (XXXX XXXX 1234), full number sealed.</li>
           <li>Everything you type is marked &quot;declared by client&quot; until a document or an ownership check (such as a one-time code) confirms it. Nothing here is searched or shared on its own.</li>
         </ul>
       </div>
@@ -585,7 +585,7 @@ export function PortalApp({ token }: { token: string }) {
         {ctx.consentStatus === 'GRANTED' ? (
           <DeclareDetailsForm token={token} declarations={ctx.declarations ?? []} onDone={load} />
         ) : (
-          <p className="text-ink-300">Once you have accepted Part A above you can share your PAN, Aadhaar (last four digits are kept), passport, mobile, e-mail and address here. Every field is optional.</p>
+          <p className="text-ink-300">Once you have accepted Part A above you can share your PAN, Aadhaar, passport, mobile, e-mail and address here. Every field is optional.</p>
         )}
       </Section>
 

@@ -3,8 +3,9 @@
  *
  *   PRELIMINARY - Part A: limited screening a prospect can accept on their phone before a first
  *                 meeting. Public records, screening lists, PAN name match, phone / e-mail
- *                 ownership and profiles the person nominates. Never Aadhaar, credit, bank,
- *                 employment or investment data. Valid 30 days.
+ *                 ownership and profiles the person nominates. No Aadhaar authentication, credit,
+ *                 bank, employment or investment data. Valid 30 days. Identifiers the person
+ *                 chooses to type on the portal (incl. Aadhaar) are stored masked, full value sealed.
  *   FULL        - Part B: KYC, financial and intelligence consent at onboarding. Valid 365 days.
  *
  * Shared by the client portal (what the person ticks), the server RPC (what is enforced) and
@@ -12,7 +13,7 @@
  */
 export type ConsentStage = 'PRELIMINARY' | 'FULL';
 
-export const CONSENT_TERMS_VERSION = '2026-10-12';
+export const CONSENT_TERMS_VERSION = '2026-10-14';
 
 export interface ConsentSourceOption {
   key: string;
@@ -49,7 +50,7 @@ const A_SOURCES: ConsentSourceOption[] = [
 ];
 
 const B_SOURCES: ConsentSourceOption[] = [
-  { key: 'IDENTITY', label: 'Identity (Aadhaar OTP eKYC, PAN, passport)', description: 'Only masked Aadhaar is stored. You complete the Aadhaar OTP yourself.', default: true },
+  { key: 'IDENTITY', label: 'Identity (Aadhaar OTP eKYC, PAN, passport)', description: 'You complete the Aadhaar OTP yourself. Numbers are shown masked; the full value is sealed and opened only by authorised staff with a logged reason.', default: true },
   { key: 'DOCUMENTS', label: 'Documents I upload or share', description: 'PAN, Aadhaar, passport, address and income proofs, DigiLocker.', default: true },
   { key: 'ADDRESS', label: 'Address verification', description: 'Geographic validation of your current and permanent address.', default: true },
   { key: 'CONTACT', label: 'E-mail verification', description: 'One-time code.', default: true },
@@ -76,7 +77,7 @@ export const CONSENT_STAGES: Record<ConsentStage, ConsentStageDefinition> = {
     purposeCode: 'PRELIMINARY_SCREENING',
     validityDays: 30,
     summary: 'A limited one-time check of your identity and public record before we discuss any product or property. It is voluntary; declining only means we will not proceed to a detailed discussion.',
-    notDone: ['No Aadhaar lookup and no storage of your Aadhaar number', 'No credit bureau enquiry', 'No bank, Account Aggregator, EPFO, investment or property data', 'No contact with your employer, family or associates', 'No search of profiles you have not nominated'],
+    notDone: ['No Aadhaar authentication or lookup. Your Aadhaar number is kept only if you choose to type or upload it yourself - shown masked, full number sealed and opened only with a logged reason', 'No credit bureau enquiry', 'No bank, Account Aggregator, EPFO, investment or property data', 'No contact with your employer, family or associates', 'No search of profiles you have not nominated'],
     sources: A_SOURCES,
     agreementText: 'I agree to the preliminary screening described in Part A. The screening is done once, within 30 days, and results are reviewed by a person before anything is recorded about me.',
   },
@@ -88,7 +89,7 @@ export const CONSENT_STAGES: Record<ConsentStage, ConsentStageDefinition> = {
     purposeCode: 'KYC_ONBOARDING',
     validityDays: 365,
     summary: 'Consent for the firm to collect, verify and analyse the categories you tick, for identity verification, anti-money-laundering obligations, suitability assessment and keeping a record of advice. Each category is independent; only the ticked ones are checked.',
-    notDone: ['Your data is never sold or used for advertising', 'Aadhaar is authenticated by you via OTP; only the masked number is kept', 'Account Aggregator and credit bureau pulls need a separate approval each time', 'No product or property is declined solely on an automated score'],
+    notDone: ['Your data is never sold or used for advertising', 'Aadhaar is authenticated by you via OTP; the number is shown masked, the full value sealed and opened only with a logged reason', 'Account Aggregator and credit bureau pulls need a separate approval each time', 'No product or property is declined solely on an automated score'],
     sources: B_SOURCES,
     agreementText: 'I have read the consent in a language I understand, the details I provide are mine and accurate, I give this consent freely, and I know how to withdraw it. I understand the firm relies on this data to meet legal obligations.',
   },
